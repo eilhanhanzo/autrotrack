@@ -1,74 +1,71 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Real-Time Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+// URL of your published Google Sheet CSV
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+let map;
+let markers = [];
+let latestTimestampElement;
 
-  <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100%; width: 100%; }
-  </style>
-</head>
+window.onload = function () {
+    initMap();
+    latestTimestampElement = document.getElementById("timestamp");
+    fetchAndPlot();
+    setInterval(fetchAndPlot, 5000); // refresh every 5 seconds
+};
 
-<body>
+function initMap() {
+    map = L.map("map").setView([5.70, 115.94], 14);
 
-<div id="map"></div>
-
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-<script>
-const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
-
-let map = L.map("map").setView([5.7, 115.93], 14); // default view
-
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19
-}).addTo(map);
-
-let marker = null;
-let polyline = L.polyline([], { color: "blue" }).addTo(map);
-
-// Fetch and update map
-async function fetchData() {
-  const response = await fetch(csvUrl);
-  const text = await response.text();
-
-  const rows = text.split("\n").slice(1); // skip header
-  let latlngs = [];
-
-  rows.forEach(row => {
-    const cols = row.split(",");
-    const lat = parseFloat(cols[3]);
-    const lon = parseFloat(cols[4]);
-
-    if (!isNaN(lat) && !isNaN(lon)) {
-      latlngs.push([lat, lon]);
-    }
-  });
-
-  if (latlngs.length === 0) return;
-
-  const latest = latlngs[latlngs.length - 1];
-
-  // Update marker
-  if (!marker) {
-    marker = L.marker(latest).addTo(map);
-    map.setView(latest, 17);
-  } else {
-    marker.setLatLng(latest);
-  }
-
-  // Update path
-  polyline.setLatLngs(latlngs);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+    }).addTo(map);
 }
 
-fetchData();
-setInterval(fetchData, 5000); // refresh every 5 seconds
-</script>
+function fetchAndPlot() {
+    fetch(CSV_URL)
+        .then(response => response.text())
+        .then(csvText => {
+            const rows = csvText.trim().split("\n").slice(1); // skip header
+            const points = [];
 
-</body>
-</html>
+            rows.forEach(row => {
+                const cols = row.split(",");
+                let lat = parseFloat(cols[0]);
+                let lng = parseFloat(cols[1]);
+                let timestamp = cols[2] || "";
+
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    points.push({ lat, lng, timestamp });
+                }
+            });
+
+            plotDots(points);
+        })
+        .catch(err => console.error("CSV Load Error:", err));
+}
+
+function plotDots(points) {
+    // remove old markers
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    if (points.length === 0) return;
+
+    let last = points[points.length - 1];
+
+    // show timestamp of latest coordinate
+    latestTimestampElement.innerText = "Latest timestamp: " + last.timestamp;
+
+    points.forEach(p => {
+        let marker = L.circleMarker([p.lat, p.lng], {
+            radius: 5,
+            color: "red",
+            fillColor: "red",
+            fillOpacity: 1
+        }).addTo(map);
+
+        marker.bindPopup("Time: " + p.timestamp);
+        markers.push(marker);
+    });
+
+    map.setView([last.lat, last.lng]);
+}
