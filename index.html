@@ -1,199 +1,74 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>Live GPS Map</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Real-Time Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+e2kF2v3Gg0vKxj3t3gQb1GvM3w5lDk8a6dQv4k4Q=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
   <style>
-    html,body,#map { height:100%; margin:0; padding:0; }
-    #topbar {
-      position: absolute; left: 10px; top: 10px; z-index: 1000;
-      background: rgba(255,255,255,0.9); padding:8px 10px; border-radius:6px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.15); font-family: Arial, sans-serif;
-    }
-    #status { font-size:13px; color:#333; }
-    #controls { margin-top:6px; font-size:13px; }
-    #controls label { font-size:13px; margin-right:6px; }
-    .small { font-size:12px; color:#666; }
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100%; width: 100%; }
   </style>
 </head>
-<body>
 
-<div id="topbar">
-  <strong>Live GPS Map</strong><br>
-  <div id="status">Loading…</div>
-  <div id="controls">
-    <label>Refresh:
-      <select id="refreshSelect">
-        <option value="5000">5s</option>
-        <option value="10000" selected>10s</option>
-        <option value="15000">15s</option>
-        <option value="30000">30s</option>
-      </select>
-    </label>
-    <button id="recenterBtn">Recenter</button>
-    <span class="small" id="pointsCount"></span>
-  </div>
-</div>
+<body>
 
 <div id="map"></div>
 
 <!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  integrity="sha256-o8b2b+gFfD1q6V0gKk8qg2M3LQ3f1J8gJb6u6l3eJ5M=" crossorigin=""></script>
-
-<!-- PapaParse for CSV parsing -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
-  integrity="sha512-5xw+6h7q6xwC5k1cD9u4k5J3k6rV7jZlGq2r6G5q1b2h3mYqGk2s7n7+1Yq6GvJ2b6O8y5v7k3i9jE0kE2L1A=="
-  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-/* ====== CONFIG ====== */
-// Your published CSV URL (from "Publish to web" -> CSV)
-const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
+const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
 
-// initial refresh ms (will be overridden by select box)
-let REFRESH_MS = 10000; // 10 seconds default
+let map = L.map("map").setView([5.7, 115.93], 14); // default view
 
-/* ====== MAP SETUP ====== */
-const map = L.map('map', { zoomControl: true }).setView([5.7216, 115.9356], 14);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19
 }).addTo(map);
 
-const polyline = L.polyline([], { weight: 4 }).addTo(map);
-let latestMarker = null;
-let markersLayer = L.layerGroup().addTo(map);
+let marker = null;
+let polyline = L.polyline([], { color: "blue" }).addTo(map);
 
-const statusEl = document.getElementById('status');
-const pointsCountEl = document.getElementById('pointsCount');
-const refreshSelect = document.getElementById('refreshSelect');
-const recenterBtn = document.getElementById('recenterBtn');
+// Fetch and update map
+async function fetchData() {
+  const response = await fetch(csvUrl);
+  const text = await response.text();
 
-refreshSelect.addEventListener('change', () => {
-  REFRESH_MS = parseInt(refreshSelect.value);
-  restartPolling();
-});
+  const rows = text.split("\n").slice(1); // skip header
+  let latlngs = [];
 
-recenterBtn.addEventListener('click', () => {
-  if (latestMarker) map.setView(latestMarker.getLatLng(), 16);
-});
+  rows.forEach(row => {
+    const cols = row.split(",");
+    const lat = parseFloat(cols[3]);
+    const lon = parseFloat(cols[4]);
 
-/* ====== CSV -> Map logic ====== */
-
-// Track previous row keys to avoid duplicate markers
-let seenKeys = new Set();
-
-// Option: only show last N points
-const MAX_VISIBLE_POINTS = 2000;
-
-function parseRowToPoint(row) {
-  // expects CSV headers: system_timestamp,lux,gps_timestamp,latitude,longitude,altitude_m,satellites
-  const ts = row.system_timestamp || row.gps_timestamp || "";
-  const lat = parseFloat(row.latitude);
-  const lon = parseFloat(row.longitude);
-  const lux = row.lux;
-  const alt = row.altitude_m;
-  const sats = row.satellites;
-  if (isNaN(lat) || isNaN(lon)) return null;
-  return { ts, lat, lon, lux, alt, sats, raw: row };
-}
-
-function buildPopup(point) {
-  const t = point.ts || "";
-  const lux = (point.lux !== undefined && point.lux !== "") ? `Lux: ${point.lux}` : "";
-  const alt = (point.alt !== undefined && point.alt !== "") ? `Altitude: ${point.alt} m` : "";
-  const sats = (point.sats !== undefined && point.sats !== "") ? `Satellites: ${point.sats}` : "";
-  return `<strong>${t}</strong><br>${[lux, alt, sats].filter(Boolean).join('<br>')}`;
-}
-
-let pollingTimer = null;
-
-async function fetchAndUpdate() {
-  statusEl.textContent = "Fetching CSV...";
-  try {
-    const res = await fetch(CSV_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error("Fetch failed: " + res.status);
-    const text = await res.text();
-
-    // Parse CSV with PapaParse (header:true)
-    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-    const rows = parsed.data;
-
-    const points = [];
-    for (const r of rows) {
-      const p = parseRowToPoint(r);
-      if (p) points.push(p);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      latlngs.push([lat, lon]);
     }
+  });
 
-    if (points.length === 0) {
-      statusEl.textContent = "No valid points in CSV.";
-      return;
-    }
+  if (latlngs.length === 0) return;
 
-    // Keep only last MAX_VISIBLE_POINTS points
-    const recent = points.slice(-MAX_VISIBLE_POINTS);
+  const latest = latlngs[latlngs.length - 1];
 
-    // Clear and redraw markers & polyline efficiently
-    markersLayer.clearLayers();
-    polyline.setLatLngs([]);
-
-    let last;
-    for (let i = 0; i < recent.length; i++) {
-      const p = recent[i];
-      last = p;
-      const latlng = [p.lat, p.lon];
-      // create small circle marker (faster than default icon)
-      const m = L.circleMarker(latlng, { radius: 6, fillOpacity: 0.9 });
-      m.bindPopup(buildPopup(p));
-      markersLayer.addLayer(m);
-      polyline.addLatLng(latlng);
-    }
-
-    // Latest marker: special icon
-    if (last) {
-      if (latestMarker) map.removeLayer(latestMarker);
-      latestMarker = L.marker([last.lat, last.lon], {
-        title: last.ts || "latest",
-      }).bindPopup(buildPopup(last)).addTo(map);
-      // center only the first load (or keep user-controlled)
-      // map.setView([last.lat, last.lon], 16); // comment/uncomment as desired
-    }
-
-    pointsCountEl.textContent = ` ${recent.length} point(s)  `;
-    statusEl.textContent = `Last fetch: ${new Date().toLocaleTimeString()}`;
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = "Error: " + err.message;
+  // Update marker
+  if (!marker) {
+    marker = L.marker(latest).addTo(map);
+    map.setView(latest, 17);
+  } else {
+    marker.setLatLng(latest);
   }
+
+  // Update path
+  polyline.setLatLngs(latlngs);
 }
 
-function startPolling() {
-  stopPolling();
-  fetchAndUpdate();
-  pollingTimer = setInterval(fetchAndUpdate, REFRESH_MS);
-}
-
-function stopPolling() {
-  if (pollingTimer) {
-    clearInterval(pollingTimer);
-    pollingTimer = null;
-  }
-}
-
-function restartPolling() {
-  stopPolling();
-  startPolling();
-}
-
-/* Start */
-startPolling();
-
+fetchData();
+setInterval(fetchData, 5000); // refresh every 5 seconds
 </script>
+
 </body>
 </html>
