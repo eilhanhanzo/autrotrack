@@ -1,3 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Real-Time Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100%; width: 100%; }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
+
+let map = L.map("map").setView([5.7, 115.93], 14); // default view
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19
+}).addTo(map);
+
+let marker = null;
+let polyline = L.polyline([], { color: "blue" }).addTo(map);
+
+// Fetch and update map
+async function fetchData() {
+  const response = await fetch(csvUrl);
+  const text = await response.text();
+
+  const rows = text.split("\n").slice(1); // skip header
+  let latlngs = [];
+
+  rows.forEach(row => {
+    const cols = row.split(",");
+    const lat = parseFloat(cols[3]);
+    const lon = parseFloat(cols[4]);
+
+    if (!isNaN(lat) && !isNaN(lon)) {
+      latlngs.push([lat, lon]);
+    }
+  });
+
+  if (latlngs.length === 0) return;
+
+  const latest = latlngs[latlngs.length - 1];
+
+  // Update marker
+  if (!marker) {
+    marker = L.marker(latest).addTo(map);
+    map.setView(latest, 17);
+  } else {
+    marker.setLatLng(latest);
+  }
+
+  // Update path
+  polyline.setLatLngs(latlngs);
+}
+
+fetchData();
+setInterval(fetchData, 5000); // refresh every 5 seconds
+</script>
+
+</body>
+</html>
+
 // URL of your published Google Sheet CSV
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
 
@@ -69,3 +144,5 @@ function plotDots(points) {
 
     map.setView([last.lat, last.lng]);
 }
+
+<div id="timestamp" style="padding:10px; font-size:16px; font-weight:bold;"></div>
