@@ -1,107 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Real-Time Tracker</title>
+  <title>Streetlight Live Tracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
   <style>
     body, html { margin: 0; padding: 0; height: 100%; }
     #map { height: 100%; width: 100%; }
-    #timestamp {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.9);
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 16px;
-      font-weight: bold;
-    }
+    #timestamp { padding:10px; font-size:16px; font-weight:bold; }
   </style>
 </head>
 
 <body>
 
+<div id="timestamp">Latest timestamp: -</div>
 <div id="map"></div>
-<div id="timestamp">Loading...</div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRwJdCYn7XQAignh4mbDT_T-xlfer0SJcJQbPq-UgGET6vLAnGE4JAVLe5T9hq9F2gbHpEVcpuHOBVB/pub?gid=240399308&single=true&output=csv";
 
-let map;
-let markers = [];
-let latestTimestampElement;
+// ---- 1. Your friend’s API URL ----
+const API_URL = "http://yourserver.com/streetlight-events";
 
-// Custom marker icon
-const customIcon = L.icon({
-    iconUrl: 'https://www.sunwayputramall.com/static/shops/9c47c4d6f79870f23f51c54432242614/w768.png', // example marker image
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -30]
+// ---- 2. Create map ----
+let map = L.map("map").setView([5.72, 115.94], 14);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19
+}).addTo(map);
+
+// ---- 3. Red icon for OFF streetlight ----
+const redIcon = L.icon({
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/463/463292.png",
+  iconSize: [32, 32],
+  iconAnchor: [16, 32]
 });
 
-window.onload = function () {
-    initMap();
-    latestTimestampElement = document.getElementById("timestamp");
-    fetchAndPlot();
-    setInterval(fetchAndPlot, 5000); // refresh every 5 seconds
-};
+// ---- 4. Store markers so we can update ----
+let markers = [];
 
-function initMap() {
-    map = L.map("map").setView([5.70, 115.94], 14);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
-}
+// ---- 5. Fetch data from PostgreSQL API ----
+async function fetchEvents() {
+  try {
+    const res = await fetch(API_URL);
+    const events = await res.json();
 
-function fetchAndPlot() {
-    fetch(CSV_URL)
-        .then(response => response.text())
-        .then(csvText => {
-            const rows = csvText.trim().split("\n").slice(1); // skip header
-            const points = [];
-
-            rows.forEach(row => {
-                const cols = row.split(",");
-                let lat = parseFloat(cols[3]);      // D = latitude
-                let lng = parseFloat(cols[4]);      // E = longitude
-                let timestamp = cols[0];            // A = system_timestamp
-                let lux = cols[1];                  // B = lux
-
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    points.push({ lat, lng, timestamp, lux });
-                }
-            });
-
-            plotMarkers(points);
-        })
-        .catch(err => console.error("CSV Load Error:", err));
-}
-
-function plotMarkers(points) {
-    // remove old markers if you don't want history
+    // remove old markers
     markers.forEach(m => map.removeLayer(m));
     markers = [];
 
-    if (points.length === 0) return;
+    if (events.length === 0) return;
 
-    let last = points[points.length - 1];
-    latestTimestampElement.innerText = "Latest timestamp: " + last.timestamp;
+    let lastEvent = events[events.length - 1];
+    document.getElementById("timestamp").innerText =
+      "Latest timestamp: " + lastEvent.timestamp;
 
-    points.forEach(p => {
-        let marker = L.marker([p.lat, p.lng], { icon: customIcon }).addTo(map);
-        marker.bindPopup(`<b>Time:</b> ${p.timestamp}<br><b>Lux:</b> ${p.lux}`);
-        markers.push(marker);
+    // add all markers
+    events.forEach(e => {
+      let m = L.marker([e.lat, e.lon], { icon: redIcon })
+        .addTo(map)
+        .bindPopup(`
+          <b>Streetlight Event</b><br>
+          Lux: ${e.lux}<br>
+          Time: ${e.timestamp}
+        `);
+
+      markers.push(m);
     });
 
-    map.setView([last.lat, last.lng]);
+  } catch (err) {
+    console.error("API error:", err);
+  }
 }
-</script>
 
+// ---- 6. Update every 5 seconds ----
+fetchEvents();
+setInterval(fetchEvents, 5000);
+
+</script>
 </body>
 </html>
