@@ -135,9 +135,7 @@
         bounds.push([e.lat, e.lon]);
       });
 
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
+     let mapHasAutoCentered = false;   // add this at the top with your globals
     }
 
     // --- 6. Boot ---
@@ -149,3 +147,4 @@
   </script>
 </body>
 </html>
+
