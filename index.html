@@ -1,16 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Streetlight Live Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<title>Streetlight Live Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
-  <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100%; width: 100%; }
-    #timestamp { padding:10px; font-size:16px; font-weight:bold; }
-  </style>
+<style>
+  body, html { margin: 0; padding: 0; height: 100%; }
+  #map { height: 100%; width: 100%; }
+  #timestamp { padding:10px; font-size:16px; font-weight:bold; }
+</style>
 </head>
 
 <body>
@@ -22,8 +23,8 @@
 
 <script>
 
-// ---- 1. Your friend’s API URL ----
-const API_URL = "http://yourserver.com/streetlight-events";
+// ---- 1. Correct API URL ----
+const API_URL = "https://drone-backend-1oq4.onrender.com/streetlight-events";
 
 // ---- 2. Create map ----
 let map = L.map("map").setView([5.72, 115.94], 14);
@@ -32,40 +33,49 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19
 }).addTo(map);
 
-// ---- 3. Red icon for OFF streetlight ----
+// ---- 3. Red OFF icon ----
 const redIcon = L.icon({
   iconUrl: "https://cdn-icons-png.flaticon.com/512/463/463292.png",
   iconSize: [32, 32],
   iconAnchor: [16, 32]
 });
 
-// ---- 4. Store markers so we can update ----
+// ---- 4. Green ON icon ----
+const greenIcon = L.icon({
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/190/190411.png",
+  iconSize: [32, 32],
+  iconAnchor: [16, 32]
+});
+
 let markers = [];
 
-// ---- 5. Fetch data from PostgreSQL API ----
+// ---- 5. Fetch data from backend ----
 async function fetchEvents() {
   try {
     const res = await fetch(API_URL);
     const events = await res.json();
 
-    // remove old markers
     markers.forEach(m => map.removeLayer(m));
     markers = [];
 
     if (events.length === 0) return;
 
-    let lastEvent = events[events.length - 1];
-    document.getElementById("timestamp").innerText =
-      "Latest timestamp: " + lastEvent.timestamp;
+    // newest event is first because backend sorts DESC
+    let lastEvent = events[0];
 
-    // add all markers
+    document.getElementById("timestamp").innerText =
+      "Latest timestamp: " + lastEvent.time;
+
     events.forEach(e => {
-      let m = L.marker([e.lat, e.lon], { icon: redIcon })
+      let icon = e.status === "OFF" ? redIcon : greenIcon;
+
+      let m = L.marker([e.lat, e.lon], { icon })
         .addTo(map)
         .bindPopup(`
           <b>Streetlight Event</b><br>
           Lux: ${e.lux}<br>
-          Time: ${e.timestamp}
+          Status: ${e.status}<br>
+          Time: ${e.time}
         `);
 
       markers.push(m);
@@ -76,7 +86,7 @@ async function fetchEvents() {
   }
 }
 
-// ---- 6. Update every 5 seconds ----
+// update every 5 seconds
 fetchEvents();
 setInterval(fetchEvents, 5000);
 
