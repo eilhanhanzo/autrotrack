@@ -6,26 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
   <style>
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       width: 100%;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-        sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    #map {
-      height: 100%;
-      width: 100%;
-    }
+    #map { height: 100%; width: 100%; }
 
     #timestamp {
       position: absolute;
@@ -39,60 +31,95 @@
       font-weight: 600;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
     }
+
+    #eventListBtn {
+      position: absolute;
+      top: 60px;
+      left: 10px;
+      z-index: 1000;
+      padding: 8px 12px;
+      background: #007bff;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    #eventList {
+      position: absolute;
+      top: 100px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    #eventList div {
+      padding: 6px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+
+    #eventList div:hover {
+      background: #f0f0f0;
+    }
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="timestamp">Loading streetlight events…</div>
+  <div id="eventListBtn">Show Events</div>
+  <div id="eventList"></div>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <script>
-    // --- 1. API URL (your backend) ---
-    const API_URL =
-      'https://drone-backend-1oq4.onrender.com/streetlight-events';
+    // --- 1. API URL ---
+    const API_URL = 'https://drone-backend-1oq4.onrender.com/streetlight-events';
 
+    // --- 2. Globals ---
     let map;
     let markers = [];
+    let markerObjects = [];
     let mapHasAutoCentered = false;
     const timestampEl = document.getElementById('timestamp');
 
-    // --- 2. Icons for ON / OFF ---
+    // --- 3. Icons ---
     const redIcon = L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/463/463292.png', // OFF
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/463/463292.png',
       iconSize: [28, 28],
       iconAnchor: [14, 28],
       popupAnchor: [0, -28],
     });
 
     const greenIcon = L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png', // ON
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png',
       iconSize: [28, 28],
       iconAnchor: [14, 28],
       popupAnchor: [0, -28],
     });
 
-    // --- 3. Initialise map ---
+    // --- 4. Initialise map ---
     function initMap() {
       map = L.map('map').setView([5.70, 115.94], 14);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-      }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     }
 
-    // --- 4. Fetch events from backend ---
+    // --- 5. Fetch events ---
     async function fetchEvents() {
       try {
         const res = await fetch(API_URL);
-        if (!res.ok) {
-          throw new Error('HTTP ' + res.status);
-        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const events = await res.json();
-	console.log("Backend returned:", events);
-
+        console.log("Backend returned:", events);
         updateMarkers(events);
       } catch (err) {
         console.error('API error:', err);
@@ -100,51 +127,68 @@
       }
     }
 
-    // --- 5. Update markers on the map ---
+    // --- 6. Update markers ---
     function updateMarkers(events) {
       // Clear old markers
-      markers.forEach((m) => map.removeLayer(m));
+      markers.forEach(m => map.removeLayer(m));
       markers = [];
+      markerObjects = [];
 
       if (!events || events.length === 0) {
         timestampEl.textContent = 'No streetlight events yet';
         return;
       }
 
-      // Backend orders DESC by time, so first element is latest
       const latest = events[0];
       timestampEl.textContent = 'Latest event: ' + latest.time;
-
-      const bounds = [];
 
       events.forEach((e) => {
         if (typeof e.lat !== 'number' || typeof e.lon !== 'number') return;
 
         const icon = e.status === 'OFF' ? redIcon : greenIcon;
-
         const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
-
-        marker.bindPopup(
-          `
-          <b>Streetlight status:</b> ${e.status}<br/>
+        marker.bindPopup(`
+          <b>Status:</b> ${e.status}<br/>
           <b>Lux:</b> ${e.lux}<br/>
           <b>Time:</b> ${e.time}<br/>
           <b>Flight:</b> ${e.flight_id || 'N/A'}
-        `
-        );
+        `);
 
         markers.push(marker);
-        bounds.push([e.lat, e.lon]);
+        markerObjects.push({
+          marker, lat: e.lat, lon: e.lon, status: e.status, time: e.time
+        });
       });
 
-   // add this at the top with your globals
+      refreshEventList();
     }
 
-    // --- 6. Boot ---
+    // --- 7. Button & event list ---
+    const btn = document.getElementById("eventListBtn");
+    const list = document.getElementById("eventList");
+
+    btn.onclick = function () {
+      list.style.display = list.style.display === "none" ? "block" : "none";
+    };
+
+    function refreshEventList() {
+      list.innerHTML = "";
+      markerObjects.forEach((obj) => {
+        const item = document.createElement("div");
+        item.innerHTML = `<b>${obj.status}</b> | ${obj.time}`;
+        item.onclick = function () {
+          map.setView([obj.lat, obj.lon], 18);
+          obj.marker.openPopup();
+        };
+        list.appendChild(item);
+      });
+    }
+
+    // --- 8. Boot ---
     window.onload = function () {
       initMap();
       fetchEvents();
-      setInterval(fetchEvents, 5000); // refresh every 5 seconds
+      setInterval(fetchEvents, 5000);
     };
   </script>
 </body>
