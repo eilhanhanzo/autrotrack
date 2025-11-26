@@ -93,19 +93,19 @@
     const timestampEl = document.getElementById('timestamp');
 
     // --- 3. Icons ---
-    const redIcon = L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/463/463292.png',
-      iconSize: [28, 28],
-      iconAnchor: [14, 28],
-      popupAnchor: [0, -28],
-    });
+const offIcon = L.icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/463/463292.png', // OFF marker
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
 
-    const greenIcon = L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png',
-      iconSize: [28, 28],
-      iconAnchor: [14, 28],
-      popupAnchor: [0, -28],
-    });
+const onIcon = L.icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png', // ON marker
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
 
     // --- 4. Initialise map ---
     function initMap() {
@@ -145,8 +145,8 @@
       events.forEach((e) => {
         if (typeof e.lat !== 'number' || typeof e.lon !== 'number') return;
 
-        const icon = e.status === 'OFF' ? redIcon : greenIcon;
-        const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
+	const icon = e.status === 'OFF' ? offIcon : onIcon;
+	const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
         marker.bindPopup(`
           <b>Status:</b> ${e.status}<br/>
           <b>Lux:</b> ${e.lux}<br/>
