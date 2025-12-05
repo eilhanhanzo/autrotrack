@@ -19,9 +19,23 @@
 
     #map { height: 100%; width: 100%; }
 
-    #timestamp {
+    /* ----- NEW LOGO STYLE ----- */
+    #logo {
       position: absolute;
       top: 10px;
+      left: 10px;
+      z-index: 2000;
+      background: rgba(255, 255, 255, 0.0);
+      padding: 0;
+    }
+    #logo img {
+      width: 80px;    /* adjust size here */
+      height: auto;
+    }
+
+    #timestamp {
+      position: absolute;
+      top: 100px; /* moved down so logo doesn’t cover it */
       left: 10px;
       z-index: 1000;
       background: rgba(255, 255, 255, 0.95);
@@ -34,7 +48,7 @@
 
     #eventListBtn {
       position: absolute;
-      top: 60px;
+      top: 150px; /* also moved down */
       left: 10px;
       z-index: 1000;
       padding: 8px 12px;
@@ -48,7 +62,7 @@
 
     #eventList {
       position: absolute;
-      top: 100px;
+      top: 190px;
       left: 10px;
       z-index: 1000;
       background: white;
@@ -74,6 +88,13 @@
 
 <body>
   <div id="map"></div>
+
+  <!-- ----- NEW LOGO ELEMENT ----- -->
+  <div id="logo">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png" />
+    <!-- Replace with your PNG URL -->
+  </div>
+
   <div id="timestamp">Loading streetlight events…</div>
   <div id="eventListBtn">Show Events</div>
   <div id="eventList"></div>
@@ -82,38 +103,33 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <script>
-    // --- 1. API URL ---
     const API_URL = 'https://drone-backend-1oq4.onrender.com/streetlight-events';
 
-    // --- 2. Globals ---
     let map;
     let markers = [];
     let markerObjects = [];
     let mapHasAutoCentered = false;
     const timestampEl = document.getElementById('timestamp');
 
-    // --- 3. Icons ---
-const offIcon = L.icon({
-  iconUrl: 'https://img.freepik.com/premium-vector/red-cross-icon-white-x-symbol-red-circle-error-cancel-sign_797523-4248.jpg', // OFF marker
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
+    const offIcon = L.icon({
+      iconUrl: 'https://img.freepik.com/premium-vector/red-cross-icon-white-x-symbol-red-circle-error-cancel-sign_797523-4248.jpg',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32],
+    });
 
-const onIcon = L.icon({
-  iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png', // ON marker
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
+    const onIcon = L.icon({
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32],
+    });
 
-    // --- 4. Initialise map ---
     function initMap() {
       map = L.map('map').setView([5.70, 115.94], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     }
 
-    // --- 5. Fetch events ---
     async function fetchEvents() {
       try {
         const res = await fetch(API_URL);
@@ -127,9 +143,7 @@ const onIcon = L.icon({
       }
     }
 
-    // --- 6. Update markers ---
     function updateMarkers(events) {
-      // Clear old markers
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       markerObjects = [];
@@ -145,8 +159,8 @@ const onIcon = L.icon({
       events.forEach((e) => {
         if (typeof e.lat !== 'number' || typeof e.lon !== 'number') return;
 
-	const icon = e.status === 'OFF' ? offIcon : onIcon;
-	const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
+        const icon = e.status === 'OFF' ? offIcon : onIcon;
+        const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
         marker.bindPopup(`
           <b>Status:</b> ${e.status}<br/>
           <b>Lux:</b> ${e.lux}<br/>
@@ -155,15 +169,12 @@ const onIcon = L.icon({
         `);
 
         markers.push(marker);
-        markerObjects.push({
-          marker, lat: e.lat, lon: e.lon, status: e.status, time: e.time
-        });
+        markerObjects.push({ marker, lat: e.lat, lon: e.lon, status: e.status, time: e.time });
       });
 
       refreshEventList();
     }
 
-    // --- 7. Button & event list ---
     const btn = document.getElementById("eventListBtn");
     const list = document.getElementById("eventList");
 
@@ -184,7 +195,6 @@ const onIcon = L.icon({
       });
     }
 
-    // --- 8. Boot ---
     window.onload = function () {
       initMap();
       fetchEvents();
