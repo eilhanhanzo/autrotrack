@@ -28,59 +28,192 @@
     }
 
     #logo img {
-      width: 100px; /* adjust size */
+      width: 100px;
       height: auto;
     }
 
-    #timestamp {
+    /* Control Panel */
+    .control-panel {
       position: absolute;
-      top: 80px; /* moved down to avoid logo */
+      top: 80px;
       left: 10px;
       z-index: 1000;
       background: rgba(255, 255, 255, 0.95);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      width: 300px;
+      max-height: 85vh;
+      overflow-y: auto;
     }
 
-    #eventListBtn {
-      position: absolute;
-      top: 130px; /* moved down */
-      left: 10px;
-      z-index: 1000;
-      padding: 8px 12px;
+    .control-section {
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .control-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #333;
+      font-size: 16px;
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
       background: #007bff;
       color: white;
-      border-radius: 6px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
-      font-weight: bold;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: background 0.2s;
     }
 
-    #eventList {
-      position: absolute;
-      top: 170px; /* moved down */
-      left: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 10px;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      max-height: 200px;
-      overflow-y: auto;
+    .btn:hover {
+      background: #0056b3;
+    }
+
+    .btn-success {
+      background: #28a745;
+    }
+
+    .btn-success:hover {
+      background: #1e7e34;
+    }
+
+    /* Status Messages */
+    #statusMessage {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
       display: none;
     }
 
-    #eventList div {
-      padding: 6px;
-      border-bottom: 1px solid #eee;
-      cursor: pointer;
+    .status-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block !important;
     }
 
-    #eventList div:hover {
-      background: #f0f0f0;
+    .status-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block !important;
+    }
+
+    /* Event List */
+    #eventList {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .event-item {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+
+    .event-item:hover {
+      background: #f8f9fa;
+    }
+
+    .event-status {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+
+    .status-ON {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status-OFF {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .event-time {
+      color: #666;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    /* Toggle buttons */
+    .toggle-btn {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .toggle-btn:hover {
+      background: #5a6268;
+    }
+
+    /* Map Click Coordinates */
+    #coordinates {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
   </style>
 </head>
@@ -92,21 +225,84 @@
     <img src="https://i.pinimg.com/736x/26/e4/86/26e486bab23151110f31adef3f942622.jpg" />
   </div>
 
+  <!-- Control Panel -->
+  <div class="control-panel">
+    <div class="control-section">
+      <div class="section-title">📡 Live Data</div>
+      <div id="timestamp">Loading streetlight events...</div>
+      <button class="toggle-btn" id="refreshBtn">🔄 Refresh Now</button>
+    </div>
+
+    <div class="control-section">
+      <div class="section-title">➕ Add New Event</div>
+      <form id="addEventForm">
+        <div class="form-group">
+          <label for="lat">Latitude</label>
+          <input type="number" id="lat" step="any" placeholder="e.g., 5.70" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="lon">Longitude</label>
+          <input type="number" id="lon" step="any" placeholder="e.g., 115.94" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="status">Status</label>
+          <select id="status" required>
+            <option value="ON">ON</option>
+            <option value="OFF">OFF</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="lux">Lux Level</label>
+          <input type="number" id="lux" placeholder="e.g., 150" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="flight_id">Flight ID (Optional)</label>
+          <input type="text" id="flight_id" placeholder="e.g., flight_001">
+        </div>
+        
+        <button type="submit" class="btn btn-success">Add Streetlight Event</button>
+      </form>
+      <div id="statusMessage"></div>
+    </div>
+
+    <div class="control-section">
+      <div class="section-title">📋 Recent Events</div>
+      <button class="toggle-btn" id="toggleEventsBtn">Show/Hide Events</button>
+      <div id="eventList"></div>
+    </div>
+  </div>
+
+  <!-- Map Click Coordinates -->
+  <div id="coordinates">Click on map to get coordinates</div>
+
   <div id="map"></div>
-  <div id="timestamp">Loading streetlight events…</div>
-  <div id="eventListBtn">Show Events</div>
-  <div id="eventList"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <script>
-    const API_URL = 'https://drone-backend-1oq4.onrender.com/streetlight-events';
+    const API_BASE_URL = 'https://drone-backend-1oq4.onrender.com';
+    const GET_EVENTS_URL = `${API_BASE_URL}/streetlight-events`;
+    const POST_EVENT_URL = `${API_BASE_URL}/streetlight-events`; // Assuming same endpoint for POST
 
     let map;
     let markers = [];
     let markerObjects = [];
+    let isAddingMode = false;
+    
+    // DOM Elements
     const timestampEl = document.getElementById('timestamp');
+    const addEventForm = document.getElementById('addEventForm');
+    const statusMessage = document.getElementById('statusMessage');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const toggleEventsBtn = document.getElementById('toggleEventsBtn');
+    const eventListEl = document.getElementById('eventList');
+    const coordinatesEl = document.getElementById('coordinates');
 
+    // Icons
     const offIcon = L.icon({
       iconUrl: 'https://img.freepik.com/premium-vector/red-cross-icon-white-x-symbol-red-circle-error-cancel-sign_797523-4248.jpg',
       iconSize: [32, 32],
@@ -121,23 +317,42 @@
       popupAnchor: [0, -32],
     });
 
+    // Initialize Map
     function initMap() {
       map = L.map('map').setView([5.70, 115.94], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+      
+      // Add click handler for map coordinates
+      map.on('click', function(e) {
+        const { lat, lng } = e.latlng;
+        coordinatesEl.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+        
+        // If in adding mode, auto-fill the form
+        if (isAddingMode) {
+          document.getElementById('lat').value = lat.toFixed(6);
+          document.getElementById('lon').value = lng.toFixed(6);
+        }
+      });
     }
 
+    // Fetch events from API
     async function fetchEvents() {
       try {
-        const res = await fetch(API_URL);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const res = await fetch(GET_EVENTS_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         const events = await res.json();
         updateMarkers(events);
+        return events;
       } catch (err) {
+        showStatus(`Error loading data: ${err.message}`, 'error');
         timestampEl.textContent = 'Error loading data';
+        return [];
       }
     }
 
+    // Update markers on map
     function updateMarkers(events) {
+      // Clear existing markers
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       markerObjects = [];
@@ -147,52 +362,173 @@
         return;
       }
 
+      // Get latest event timestamp
       const latest = events[0];
-      timestampEl.textContent = 'Latest event: ' + latest.time;
+      const date = new Date(latest.time);
+      timestampEl.textContent = `Latest: ${date.toLocaleString()}`;
 
+      // Add markers for each event
       events.forEach((e) => {
         if (typeof e.lat !== 'number' || typeof e.lon !== 'number') return;
 
         const icon = e.status === 'OFF' ? offIcon : onIcon;
         const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
+        
         marker.bindPopup(`
-          <b>Status:</b> ${e.status}<br/>
-          <b>Lux:</b> ${e.lux}<br/>
-          <b>Time:</b> ${e.time}<br/>
-          <b>Flight:</b> ${e.flight_id || 'N/A'}
+          <div style="font-size: 14px;">
+            <b>Status:</b> <span class="${e.status === 'ON' ? 'status-ON' : 'status-OFF'}">${e.status}</span><br/>
+            <b>Lux:</b> ${e.lux}<br/>
+            <b>Time:</b> ${new Date(e.time).toLocaleString()}<br/>
+            <b>Flight:</b> ${e.flight_id || 'N/A'}<br/>
+            <b>Location:</b> ${e.lat.toFixed(6)}, ${e.lon.toFixed(6)}
+          </div>
         `);
 
         markers.push(marker);
-        markerObjects.push({ marker, lat: e.lat, lon: e.lon, status: e.status, time: e.time });
+        markerObjects.push({
+          marker,
+          lat: e.lat,
+          lon: e.lon,
+          status: e.status,
+          lux: e.lux,
+          time: e.time,
+          flight_id: e.flight_id
+        });
       });
 
       refreshEventList();
     }
 
-    const btn = document.getElementById("eventListBtn");
-    const list = document.getElementById("eventList");
+    // Add new event to API
+    async function addNewEvent(eventData) {
+      try {
+        showStatus('Adding event...', 'info');
+        
+        const response = await fetch(POST_EVENT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(eventData)
+        });
 
-    btn.onclick = () => {
-      list.style.display = list.style.display === "none" ? "block" : "none";
-    };
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
+        const result = await response.json();
+        showStatus('Event added successfully!', 'success');
+        
+        // Clear form
+        addEventForm.reset();
+        
+        // Refresh the events list
+        setTimeout(fetchEvents, 1000);
+        
+        return result;
+      } catch (err) {
+        showStatus(`Error adding event: ${err.message}`, 'error');
+        console.error('Add event error:', err);
+        throw err;
+      }
+    }
+
+    // Refresh event list in sidebar
     function refreshEventList() {
-      list.innerHTML = "";
-      markerObjects.forEach((obj) => {
+      eventListEl.innerHTML = "";
+      
+      if (markerObjects.length === 0) {
+        eventListEl.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">No events found</div>';
+        return;
+      }
+      
+      // Show last 10 events
+      const recentEvents = markerObjects.slice(0, 10);
+      
+      recentEvents.forEach((obj) => {
         const item = document.createElement("div");
-        item.innerHTML = `<b>${obj.status}</b> | ${obj.time}`;
+        item.className = "event-item";
+        
+        const date = new Date(obj.time);
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        item.innerHTML = `
+          <div>
+            <span class="event-item status-${obj.status}">${obj.status}</span>
+            <span>Lux: ${obj.lux}</span>
+          </div>
+          <div class="event-time">${timeStr} • ${obj.lat.toFixed(4)}, ${obj.lon.toFixed(4)}</div>
+        `;
+        
         item.onclick = () => {
           map.setView([obj.lat, obj.lon], 18);
           obj.marker.openPopup();
         };
-        list.appendChild(item);
+        
+        eventListEl.appendChild(item);
       });
     }
 
+    // Show status messages
+    function showStatus(message, type = 'info') {
+      statusMessage.textContent = message;
+      statusMessage.className = '';
+      
+      if (type === 'success') {
+        statusMessage.classList.add('status-success');
+      } else if (type === 'error') {
+        statusMessage.classList.add('status-error');
+      }
+      
+      // Auto-hide success messages after 3 seconds
+      if (type === 'success') {
+        setTimeout(() => {
+          statusMessage.style.display = 'none';
+        }, 3000);
+      }
+    }
+
+    // Event Listeners
+    addEventForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const eventData = {
+        lat: parseFloat(document.getElementById('lat').value),
+        lon: parseFloat(document.getElementById('lon').value),
+        status: document.getElementById('status').value,
+        lux: parseFloat(document.getElementById('lux').value),
+        flight_id: document.getElementById('flight_id').value || null,
+        time: new Date().toISOString()
+      };
+      
+      try {
+        await addNewEvent(eventData);
+      } catch (err) {
+        // Error already shown in addNewEvent function
+      }
+    });
+
+    refreshBtn.addEventListener('click', () => {
+      fetchEvents();
+      showStatus('Refreshing data...', 'info');
+    });
+
+    toggleEventsBtn.addEventListener('click', () => {
+      const isVisible = eventListEl.style.display !== 'none';
+      eventListEl.style.display = isVisible ? 'none' : 'block';
+      toggleEventsBtn.textContent = isVisible ? 'Show Events' : 'Hide Events';
+    });
+
+    // Initialize everything when page loads
     window.onload = () => {
       initMap();
       fetchEvents();
-      setInterval(fetchEvents, 5000);
+      
+      // Auto-refresh every 10 seconds
+      setInterval(fetchEvents, 10000);
+      
+      // Show events list by default
+      eventListEl.style.display = 'block';
     };
   </script>
 </body>
