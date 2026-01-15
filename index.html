@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Streetlight Coordinate Validation System</title>
+  <title>Streetlight DB Sync Debugger</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -20,28 +20,31 @@
       position: absolute;
       top: 10px;
       left: 10px;
-      width: 340px;
-      background: rgba(255,255,255,0.95);
+      width: 380px;
+      background: rgba(255,255,255,0.97);
       padding: 15px;
       border-radius: 8px;
       z-index: 1000;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       max-height: 95vh;
       overflow-y: auto;
     }
 
-    h3 { margin-top: 0; }
+    h3 {
+      margin: 10px 0 5px;
+      font-size: 15px;
+    }
 
     label {
       font-size: 13px;
-      margin-top: 8px;
+      margin-top: 6px;
       display: block;
     }
 
     input, select {
       width: 100%;
       padding: 7px;
-      margin-top: 4px;
+      margin-top: 3px;
       border-radius: 4px;
       border: 1px solid #ccc;
     }
@@ -49,7 +52,7 @@
     button {
       margin-top: 10px;
       width: 100%;
-      padding: 10px;
+      padding: 9px;
       background: #007bff;
       color: white;
       border: none;
@@ -61,17 +64,19 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
-      margin-top: 10px;
+      font-size: 11px;
+      margin-top: 5px;
     }
 
     th, td {
       border: 1px solid #ddd;
-      padding: 6px;
+      padding: 5px;
       text-align: center;
     }
 
-    th { background: #f2f2f2; }
+    th {
+      background: #f2f2f2;
+    }
 
     tr:hover {
       background: #e6f2ff;
@@ -81,8 +86,18 @@
     .on { color: green; font-weight: bold; }
     .off { color: red; font-weight: bold; }
 
+    .synced {
+      background: #d4edda;
+      font-weight: bold;
+    }
+
+    .unsynced {
+      background: #fff3cd;
+      font-weight: bold;
+    }
+
     #msg {
-      margin-top: 8px;
+      margin-top: 6px;
       font-size: 13px;
     }
 
@@ -103,7 +118,7 @@
 <body>
 
 <div class="panel">
-  <h3>➕ Add Streetlight Event</h3>
+  <h3>➕ Add Streetlight (Local)</h3>
 
   <form id="eventForm">
     <label>Latitude</label>
@@ -121,12 +136,26 @@
     <label>Lux</label>
     <input type="number" id="lux" step="any" required>
 
-    <button type="submit">Save Event</button>
+    <button type="submit">Save to Local DB</button>
   </form>
 
   <div id="msg"></div>
 
-  <h3>📊 Local Streetlight Table</h3>
+  <h3>📊 Local DB (Staging)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Sync</th>
+        <th>Status</th>
+        <th>Lux</th>
+        <th>Lat</th>
+        <th>Lon</th>
+      </tr>
+    </thead>
+    <tbody id="localTable"></tbody>
+  </table>
+
+  <h3>🗄 Backend DB (Read-only)</h3>
   <table>
     <thead>
       <tr>
@@ -134,10 +163,9 @@
         <th>Lux</th>
         <th>Lat</th>
         <th>Lon</th>
-        <th>Time</th>
       </tr>
     </thead>
-    <tbody id="tableBody"></tbody>
+    <tbody id="backendTable"></tbody>
   </table>
 </div>
 
@@ -147,9 +175,12 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
+  const BACKEND_URL = 'https://drone-backend-1oq4.onrender.com/streetlight-events';
+
   let map;
   let markers = [];
-  let streetlightDB = JSON.parse(localStorage.getItem('streetlights')) || [];
+  let backendDB = [];
+  let localDB = JSON.parse(localStorage.getItem('localStreetlights')) || [];
 
   // ---------- UTIL ----------
   function nowUTC() {
@@ -158,18 +189,17 @@
       .replace(/\.\d+Z$/, '+00');
   }
 
-  function message(text, ok = true) {
+  function coordKey(e) {
+    return `${e.lat.toFixed(6)}_${e.lon.toFixed(6)}`;
+  }
+
+  function showMsg(text, ok = true) {
     msg.textContent = text;
     msg.style.color = ok ? 'green' : 'red';
   }
 
-  function coordsMatch(a, b) {
-    return a.lat.toFixed(6) === b.lat.toFixed(6) &&
-           a.lon.toFixed(6) === b.lon.toFixed(6);
-  }
-
   function saveLocal() {
-    localStorage.setItem('streetlights', JSON.stringify(streetlightDB));
+    localStorage.setItem('localStreetlights', JSON.stringify(localDB));
   }
 
   // ---------- MAP ----------
@@ -184,36 +214,56 @@
     });
   }
 
+  // ---------- LOAD BACKEND ----------
+  async function loadBackend() {
+    const res = await fetch(BACKEND_URL);
+    backendDB = await res.json();
+  }
+
   // ---------- RENDER ----------
   function render() {
-    tableBody.innerHTML = '';
     markers.forEach(m => map.removeLayer(m));
     markers = [];
+    localTable.innerHTML = '';
+    backendTable.innerHTML = '';
 
-    streetlightDB.forEach(e => {
-      const marker = L.marker([e.lat, e.lon]).addTo(map);
-      marker.bindPopup(`
-        <b>Status:</b> ${e.status}<br>
-        <b>Lux:</b> ${e.lux}<br>
-        <b>Time:</b> ${e.time}
-      `);
-      markers.push(marker);
+    const backendKeys = new Set(backendDB.map(coordKey));
 
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td class="${e.status === 'ON' ? 'on' : 'off'}">${e.status}</td>
-        <td>${e.lux}</td>
-        <td>${e.lat.toFixed(4)}</td>
-        <td>${e.lon.toFixed(4)}</td>
-        <td>${e.time}</td>
-      `;
+    // Backend markers + table
+    backendDB.forEach(e => {
+      const m = L.marker([e.lat, e.lon]).addTo(map);
+      m.bindPopup(`<b>BACKEND</b><br>Status: ${e.status}<br>Lux: ${e.lux}`);
+      markers.push(m);
 
-      row.onclick = () => {
-        map.setView([e.lat, e.lon], 18);
-        marker.openPopup();
-      };
+      backendTable.innerHTML += `
+        <tr>
+          <td class="${e.status === 'ON' ? 'on' : 'off'}">${e.status}</td>
+          <td>${e.lux}</td>
+          <td>${e.lat.toFixed(4)}</td>
+          <td>${e.lon.toFixed(4)}</td>
+        </tr>`;
+    });
 
-      tableBody.appendChild(row);
+    // Local markers + table
+    localDB.forEach(e => {
+      const synced = backendKeys.has(coordKey(e));
+
+      const m = L.circleMarker([e.lat, e.lon], {
+        radius: 6,
+        color: synced ? 'green' : 'orange'
+      }).addTo(map);
+
+      m.bindPopup(`<b>LOCAL</b><br>Status: ${e.status}<br>Lux: ${e.lux}`);
+      markers.push(m);
+
+      localTable.innerHTML += `
+        <tr class="${synced ? 'synced' : 'unsynced'}">
+          <td>${synced ? 'SYNCED' : 'NOT SYNCED'}</td>
+          <td class="${e.status === 'ON' ? 'on' : 'off'}">${e.status}</td>
+          <td>${e.lux}</td>
+          <td>${e.lat.toFixed(4)}</td>
+          <td>${e.lon.toFixed(4)}</td>
+        </tr>`;
     });
   }
 
@@ -221,7 +271,7 @@
   eventForm.addEventListener('submit', e => {
     e.preventDefault();
 
-    const newEvent = {
+    const entry = {
       lat: parseFloat(lat.value),
       lon: parseFloat(lon.value),
       status: status.value,
@@ -229,23 +279,23 @@
       time: nowUTC()
     };
 
-    const exists = streetlightDB.some(e => coordsMatch(e, newEvent));
-
+    const exists = localDB.some(e => coordKey(e) === coordKey(entry));
     if (exists) {
-      message('Streetlight already exists at this coordinate', false);
+      showMsg('Already exists in local DB', false);
       return;
     }
 
-    streetlightDB.push(newEvent);
+    localDB.push(entry);
     saveLocal();
     render();
-    message('New streetlight added');
+    showMsg('Saved locally');
     eventForm.reset();
   });
 
   // ---------- INIT ----------
-  window.onload = () => {
+  window.onload = async () => {
     initMap();
+    await loadBackend();
     render();
   };
 </script>
