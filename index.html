@@ -18,7 +18,6 @@
 
     #map { height: 100%; width: 100%; }
 
-    /* ----- LOGO TOP CENTER ----- */
     #logo {
       position: absolute;
       top: 10px;
@@ -32,7 +31,6 @@
       height: auto;
     }
 
-    /* Control Panel */
     .control-panel {
       position: absolute;
       top: 80px;
@@ -65,7 +63,6 @@
       font-size: 16px;
     }
 
-    /* Form Styles */
     .form-group {
       margin-bottom: 12px;
     }
@@ -94,8 +91,9 @@
     }
 
     .btn {
-      display: inline-block;
-      padding: 8px 16px;
+      display: block;
+      width: 100%;
+      padding: 10px;
       background: #007bff;
       color: white;
       border: none;
@@ -104,8 +102,7 @@
       font-weight: 600;
       cursor: pointer;
       transition: background 0.2s;
-      margin-right: 8px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
 
     .btn:hover {
@@ -120,15 +117,6 @@
       background: #1e7e34;
     }
 
-    .btn-danger {
-      background: #dc3545;
-    }
-
-    .btn-danger:hover {
-      background: #c82333;
-    }
-
-    /* Status Messages */
     #statusMessage {
       margin-top: 10px;
       padding: 8px 12px;
@@ -158,7 +146,6 @@
       display: block !important;
     }
 
-    /* Event List */
     #eventList {
       max-height: 200px;
       overflow-y: auto;
@@ -177,63 +164,12 @@
       background: #f8f9fa;
     }
 
-    .event-status {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 11px;
-      font-weight: bold;
-      margin-right: 6px;
-    }
-
-    .status-ON {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .status-OFF {
-      background: #f8d7da;
-      color: #721c24;
-    }
-
     .event-time {
       color: #666;
       font-size: 12px;
       margin-top: 2px;
     }
 
-    /* Debug Panel */
-    #debugPanel {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      width: 300px;
-      max-height: 200px;
-      overflow-y: auto;
-      display: none;
-    }
-
-    .debug-title {
-      font-weight: 600;
-      margin-bottom: 10px;
-      color: #dc3545;
-      font-size: 14px;
-    }
-
-    .debug-content {
-      font-family: monospace;
-      font-size: 12px;
-      white-space: pre-wrap;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-
-    /* Map Click Coordinates */
     #coordinates {
       position: absolute;
       bottom: 10px;
@@ -246,12 +182,27 @@
       font-size: 12px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+
+    /* Debug info */
+    .debug-info {
+      position: absolute;
+      bottom: 50px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      max-width: 300px;
+      max-height: 200px;
+      overflow: auto;
+      display: none;
+    }
   </style>
 </head>
 
 <body>
 
-  <!-- TOP-CENTER LOGO -->
   <div id="logo">
     <img src="https://i.pinimg.com/736x/26/e4/86/26e486bab23151110f31adef3f942622.jpg" />
   </div>
@@ -262,7 +213,6 @@
       <div class="section-title">📡 Live Data</div>
       <div id="timestamp">Loading streetlight events...</div>
       <button class="btn" id="refreshBtn">🔄 Refresh</button>
-      <button class="btn btn-danger" id="debugBtn">🐛 Debug</button>
     </div>
 
     <div class="control-section">
@@ -270,12 +220,12 @@
       <form id="addEventForm">
         <div class="form-group">
           <label for="lat">Latitude</label>
-          <input type="number" id="lat" step="any" placeholder="e.g., 5.70" required>
+          <input type="number" id="lat" step="any" value="5.70" required>
         </div>
         
         <div class="form-group">
           <label for="lon">Longitude</label>
-          <input type="number" id="lon" step="any" placeholder="e.g., 115.94" required>
+          <input type="number" id="lon" step="any" value="115.94" required>
         </div>
         
         <div class="form-group">
@@ -288,16 +238,17 @@
         
         <div class="form-group">
           <label for="lux">Lux Level</label>
-          <input type="number" id="lux" placeholder="e.g., 150" required>
+          <input type="number" id="lux" step="any" value="100" required>
         </div>
         
         <div class="form-group">
-          <label for="flight_id">Flight ID (Optional)</label>
-          <input type="text" id="flight_id" placeholder="e.g., flight_001">
+          <label for="flight_id">Flight ID (UUID format)</label>
+          <input type="text" id="flight_id" placeholder="e.g., 2a6caa32-3f9f-4ed5-8b81-e2f0b77ab8ac">
+          <small style="color: #666; font-size: 12px;">Leave empty to generate random UUID</small>
         </div>
         
         <button type="submit" class="btn btn-success">Add Streetlight Event</button>
-        <button type="button" class="btn" id="testEndpointBtn">Test Endpoints</button>
+        <button type="button" class="btn" id="debugBtn">Show Debug Info</button>
       </form>
       <div id="statusMessage"></div>
     </div>
@@ -308,13 +259,10 @@
     </div>
   </div>
 
-  <!-- Debug Panel -->
-  <div id="debugPanel">
-    <div class="debug-title">Debug Information</div>
-    <div id="debugContent" class="debug-content"></div>
-  </div>
+  <!-- Debug Info -->
+  <div id="debugInfo" class="debug-info"></div>
 
-  <!-- Map Click Coordinates -->
+  <!-- Map Coordinates -->
   <div id="coordinates">Click on map to get coordinates</div>
 
   <div id="map"></div>
@@ -324,22 +272,11 @@
   <script>
     const API_BASE_URL = 'https://drone-backend-1oq4.onrender.com';
     const GET_EVENTS_URL = `${API_BASE_URL}/streetlight-events`;
-    
-    // Try different possible POST endpoints
-    const POST_ENDPOINTS = [
-      `${API_BASE_URL}/streetlight-events`,  // Same as GET
-      `${API_BASE_URL}/streetlight-events/add`,
-      `${API_BASE_URL}/streetlight-events/create`,
-      `${API_BASE_URL}/streetlight-events/new`,
-      `${API_BASE_URL}/add-streetlight-event`,
-      `${API_BASE_URL}/create-streetlight-event`
-    ];
+    const POST_EVENT_URL = `${API_BASE_URL}/streetlight-events`;
 
     let map;
     let markers = [];
     let markerObjects = [];
-    let lastEventData = null;
-    let currentPostEndpointIndex = 0;
     
     // DOM Elements
     const timestampEl = document.getElementById('timestamp');
@@ -347,9 +284,7 @@
     const statusMessage = document.getElementById('statusMessage');
     const refreshBtn = document.getElementById('refreshBtn');
     const debugBtn = document.getElementById('debugBtn');
-    const debugPanel = document.getElementById('debugPanel');
-    const debugContent = document.getElementById('debugContent');
-    const testEndpointBtn = document.getElementById('testEndpointBtn');
+    const debugInfo = document.getElementById('debugInfo');
     const eventListEl = document.getElementById('eventList');
     const coordinatesEl = document.getElementById('coordinates');
 
@@ -373,15 +308,33 @@
       map = L.map('map').setView([5.70, 115.94], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
       
-      // Add click handler for map coordinates
       map.on('click', function(e) {
         const { lat, lng } = e.latlng;
         coordinatesEl.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
-        
-        // Auto-fill the form
         document.getElementById('lat').value = lat.toFixed(6);
         document.getElementById('lon').value = lng.toFixed(6);
       });
+    }
+
+    // Generate UUID (for flight_id if not provided)
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    // Format time to match your backend format: "YYYY-MM-DD HH:MM:SS+00"
+    function formatTime(date) {
+      const pad = (n) => n.toString().padStart(2, '0');
+      const year = date.getUTCFullYear();
+      const month = pad(date.getUTCMonth() + 1);
+      const day = pad(date.getUTCDate());
+      const hours = pad(date.getUTCHours());
+      const minutes = pad(date.getUTCMinutes());
+      const seconds = pad(date.getUTCSeconds());
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}+00`;
     }
 
     // Fetch events from API
@@ -392,12 +345,6 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         const events = await res.json();
         
-        // Debug: Log the structure of first event
-        if (events && events.length > 0) {
-          console.log('Sample event structure:', events[0]);
-          debugLog('GET Response Sample:', JSON.stringify(events[0], null, 2));
-        }
-        
         updateMarkers(events);
         showStatus(`Loaded ${events.length} events`, 'success');
         setTimeout(() => hideStatus(), 2000);
@@ -405,14 +352,13 @@
       } catch (err) {
         showStatus(`Error loading data: ${err.message}`, 'error');
         timestampEl.textContent = 'Error loading data';
-        debugLog('Fetch Error:', err.message);
+        console.error('Fetch error:', err);
         return [];
       }
     }
 
     // Update markers on map
     function updateMarkers(events) {
-      // Clear existing markers
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       markerObjects = [];
@@ -423,28 +369,25 @@
         return;
       }
 
-      // Get latest event timestamp
+      // Sort by time (newest first)
+      events.sort((a, b) => new Date(b.time) - new Date(a.time));
+      
       const latest = events[0];
-      const date = new Date(latest.time || latest.timestamp || latest.createdAt);
+      const date = new Date(latest.time);
       timestampEl.textContent = `Latest: ${date.toLocaleString()}`;
 
-      // Add markers for each event
       events.forEach((e) => {
         if (typeof e.lat !== 'number' || typeof e.lon !== 'number') return;
 
         const icon = e.status === 'OFF' ? offIcon : onIcon;
         const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
         
-        const time = e.time || e.timestamp || e.createdAt;
-        const flightId = e.flight_id || e.flightId || e.flight || 'N/A';
-        const lux = e.lux || e.light_level || e.brightness || 'N/A';
-        
         marker.bindPopup(`
           <div style="font-size: 14px;">
             <b>Status:</b> <span style="color: ${e.status === 'ON' ? 'green' : 'red'}">${e.status}</span><br/>
-            <b>Lux:</b> ${lux}<br/>
-            <b>Time:</b> ${new Date(time).toLocaleString()}<br/>
-            <b>Flight:</b> ${flightId}<br/>
+            <b>Lux:</b> ${e.lux}<br/>
+            <b>Time:</b> ${new Date(e.time).toLocaleString()}<br/>
+            <b>Flight ID:</b> ${e.flight_id}<br/>
             <b>Location:</b> ${e.lat.toFixed(6)}, ${e.lon.toFixed(6)}
           </div>
         `);
@@ -455,29 +398,25 @@
           lat: e.lat,
           lon: e.lon,
           status: e.status,
-          lux: lux,
-          time: time,
-          flight_id: flightId,
-          rawData: e
+          lux: e.lux,
+          time: e.time,
+          flight_id: e.flight_id
         });
       });
 
       refreshEventList();
     }
 
-    // Try different POST endpoints
-    async function tryAddEvent(eventData, endpointIndex = 0) {
-      if (endpointIndex >= POST_ENDPOINTS.length) {
-        throw new Error('All endpoints failed');
-      }
-      
-      const endpoint = POST_ENDPOINTS[endpointIndex];
-      showStatus(`Trying endpoint: ${endpoint}`, 'info');
-      
-      debugLog(`Trying POST to: ${endpoint}`, JSON.stringify(eventData, null, 2));
-      
+    // Add new event to API
+    async function addNewEvent(eventData) {
       try {
-        const response = await fetch(endpoint, {
+        showStatus('Adding event...', 'info');
+        
+        // Log what we're sending
+        console.log('Sending data:', eventData);
+        debugInfo.innerHTML = `<strong>Sending:</strong><br>${JSON.stringify(eventData, null, 2)}`;
+        
+        const response = await fetch(POST_EVENT_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -486,86 +425,37 @@
           body: JSON.stringify(eventData)
         });
 
-        debugLog(`Response Status: ${response.status}`, await response.text().catch(e => 'Could not read response'));
+        // Log response
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        debugInfo.innerHTML += `<br><br><strong>Response (${response.status}):</strong><br>${responseText}`;
         
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          throw new Error(`HTTP ${response.status}: ${responseText}`);
         }
 
-        const result = await response.json();
-        showStatus(`Success! Event added via ${endpoint}`, 'success');
-        currentPostEndpointIndex = endpointIndex; // Remember successful endpoint
+        const result = JSON.parse(responseText);
+        showStatus('Event added successfully!', 'success');
+        
+        // Clear form but keep lat/lon
+        document.getElementById('status').value = 'ON';
+        document.getElementById('lux').value = '100';
+        document.getElementById('flight_id').value = '';
         
         // Refresh events
         setTimeout(fetchEvents, 1000);
         
-        return { success: true, endpoint, data: result };
-      } catch (err) {
-        // Try next endpoint
-        if (endpointIndex < POST_ENDPOINTS.length - 1) {
-          return tryAddEvent(eventData, endpointIndex + 1);
-        } else {
-          throw err;
-        }
-      }
-    }
-
-    // Add new event to API
-    async function addNewEvent(eventData) {
-      try {
-        showStatus('Trying to add event...', 'info');
-        lastEventData = eventData; // Store for debugging
-        
-        const result = await tryAddEvent(eventData);
-        
-        // Clear form
-        addEventForm.reset();
-        
         return result;
       } catch (err) {
-        showStatus(`Error: All endpoints failed. Check debug panel.`, 'error');
-        debugLog('All endpoints failed. Last attempt data:', JSON.stringify(eventData, null, 2));
+        showStatus(`Error: ${err.message}`, 'error');
         console.error('Add event error:', err);
         throw err;
       }
     }
 
-    // Test all endpoints
-    async function testEndpoints() {
-      showStatus('Testing endpoints...', 'info');
-      debugLog('Testing all POST endpoints:', '');
-      
-      const testData = {
-        lat: 5.70,
-        lon: 115.94,
-        status: 'ON',
-        lux: 100,
-        flight_id: 'test_flight',
-        time: new Date().toISOString()
-      };
-      
-      for (let i = 0; i < POST_ENDPOINTS.length; i++) {
-        const endpoint = POST_ENDPOINTS[i];
-        debugLog(`\n--- Testing ${endpoint} ---`, '');
-        
-        try {
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(testData)
-          });
-          
-          const responseText = await response.text();
-          debugLog(`Status: ${response.status}`, `Response: ${responseText.substring(0, 200)}...`);
-        } catch (err) {
-          debugLog(`Error:`, err.message);
-        }
-      }
-      
-      showStatus('Endpoint test complete. Check debug panel.', 'info');
-    }
-
-    // Refresh event list in sidebar
+    // Refresh event list
     function refreshEventList() {
       eventListEl.innerHTML = "";
       
@@ -574,8 +464,8 @@
         return;
       }
       
-      // Show last 10 events
-      const recentEvents = markerObjects.slice(0, 10);
+      // Show last 5 events
+      const recentEvents = markerObjects.slice(0, 5);
       
       recentEvents.forEach((obj) => {
         const item = document.createElement("div");
@@ -592,7 +482,7 @@
             <span style="float: right;">Lux: ${obj.lux}</span>
           </div>
           <div class="event-time">${dateStr} ${timeStr}</div>
-          <div class="event-time">${obj.lat.toFixed(4)}, ${obj.lon.toFixed(4)}</div>
+          <div class="event-time">${obj.flight_id.substring(0, 8)}...</div>
         `;
         
         item.onclick = () => {
@@ -604,7 +494,7 @@
       });
     }
 
-    // Show status messages
+    // Status messages
     function showStatus(message, type = 'info') {
       statusMessage.textContent = message;
       statusMessage.className = '';
@@ -624,47 +514,45 @@
       statusMessage.style.display = 'none';
     }
 
-    // Debug logging
-    function debugLog(title, content) {
-      const timestamp = new Date().toLocaleTimeString();
-      const logEntry = `[${timestamp}] ${title}\n${content}\n\n`;
-      debugContent.textContent = logEntry + debugContent.textContent;
-      console.log(`[DEBUG] ${title}`, content);
-    }
-
     // Event Listeners
     addEventForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
+      // Get values
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+      const status = document.getElementById('status').value;
+      const lux = parseFloat(document.getElementById('lux').value);
+      let flight_id = document.getElementById('flight_id').value.trim();
+      
+      // Generate UUID if not provided
+      if (!flight_id) {
+        flight_id = generateUUID();
+      }
+      
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(flight_id)) {
+        showStatus('Flight ID must be a valid UUID format', 'error');
+        return;
+      }
+      
+      // Create event data matching your backend format
       const eventData = {
-        lat: parseFloat(document.getElementById('lat').value),
-        lon: parseFloat(document.getElementById('lon').value),
-        status: document.getElementById('status').value,
-        lux: parseFloat(document.getElementById('lux').value),
-        flight_id: document.getElementById('flight_id').value || undefined,
-        time: new Date().toISOString()
+        lat: lat,
+        lon: lon,
+        status: status,
+        lux: lux,
+        flight_id: flight_id,
+        time: formatTime(new Date()) // Format: "2025-12-12 11:32:00+00"
       };
       
-      // Also try alternative field names
-      const alternativeData = {
-        ...eventData,
-        flightId: eventData.flight_id,
-        timestamp: eventData.time,
-        light_level: eventData.lux,
-        brightness: eventData.lux
-      };
+      console.log('Formatted event data:', eventData);
       
       try {
-        // First try with original field names
         await addNewEvent(eventData);
       } catch (err) {
-        // If that fails, try with alternative field names
-        debugLog('Original failed, trying alternative field names...', '');
-        try {
-          await addNewEvent(alternativeData);
-        } catch (err2) {
-          showStatus('All attempts failed. Check server logs.', 'error');
-        }
+        // Error already shown
       }
     });
 
@@ -673,23 +561,16 @@
     });
 
     debugBtn.addEventListener('click', () => {
-      debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+      debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
     });
 
-    testEndpointBtn.addEventListener('click', testEndpoints);
-
-    // Initialize everything when page loads
+    // Initialize
     window.onload = () => {
       initMap();
       fetchEvents();
       
-      // Auto-refresh every 10 seconds
-      setInterval(fetchEvents, 10000);
-      
-      // Set default coordinates
-      document.getElementById('lat').value = '5.70';
-      document.getElementById('lon').value = '115.94';
-      document.getElementById('lux').value = '150';
+      // Auto-refresh every 30 seconds
+      setInterval(fetchEvents, 30000);
     };
   </script>
 </body>
