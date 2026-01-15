@@ -94,9 +94,8 @@
     }
 
     .btn {
-      display: block;
-      width: 100%;
-      padding: 10px;
+      display: inline-block;
+      padding: 8px 16px;
       background: #007bff;
       color: white;
       border: none;
@@ -105,6 +104,8 @@
       font-weight: 600;
       cursor: pointer;
       transition: background 0.2s;
+      margin-right: 8px;
+      margin-bottom: 8px;
     }
 
     .btn:hover {
@@ -117,6 +118,14 @@
 
     .btn-success:hover {
       background: #1e7e34;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+    }
+
+    .btn-danger:hover {
+      background: #c82333;
     }
 
     /* Status Messages */
@@ -139,6 +148,13 @@
       background: #f8d7da;
       color: #721c24;
       border: 1px solid #f5c6cb;
+      display: block !important;
+    }
+
+    .status-info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
       display: block !important;
     }
 
@@ -186,20 +202,35 @@
       margin-top: 2px;
     }
 
-    /* Toggle buttons */
-    .toggle-btn {
-      background: #6c757d;
-      color: white;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      margin-bottom: 10px;
+    /* Debug Panel */
+    #debugPanel {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      width: 300px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
     }
 
-    .toggle-btn:hover {
-      background: #5a6268;
+    .debug-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #dc3545;
+      font-size: 14px;
+    }
+
+    .debug-content {
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
     }
 
     /* Map Click Coordinates */
@@ -230,7 +261,8 @@
     <div class="control-section">
       <div class="section-title">📡 Live Data</div>
       <div id="timestamp">Loading streetlight events...</div>
-      <button class="toggle-btn" id="refreshBtn">🔄 Refresh Now</button>
+      <button class="btn" id="refreshBtn">🔄 Refresh</button>
+      <button class="btn btn-danger" id="debugBtn">🐛 Debug</button>
     </div>
 
     <div class="control-section">
@@ -265,15 +297,21 @@
         </div>
         
         <button type="submit" class="btn btn-success">Add Streetlight Event</button>
+        <button type="button" class="btn" id="testEndpointBtn">Test Endpoints</button>
       </form>
       <div id="statusMessage"></div>
     </div>
 
     <div class="control-section">
       <div class="section-title">📋 Recent Events</div>
-      <button class="toggle-btn" id="toggleEventsBtn">Show/Hide Events</button>
-      <div id="eventList"></div>
+      <div id="eventList">Loading...</div>
     </div>
+  </div>
+
+  <!-- Debug Panel -->
+  <div id="debugPanel">
+    <div class="debug-title">Debug Information</div>
+    <div id="debugContent" class="debug-content"></div>
   </div>
 
   <!-- Map Click Coordinates -->
@@ -286,19 +324,32 @@
   <script>
     const API_BASE_URL = 'https://drone-backend-1oq4.onrender.com';
     const GET_EVENTS_URL = `${API_BASE_URL}/streetlight-events`;
-    const POST_EVENT_URL = `${API_BASE_URL}/streetlight-events`; // Assuming same endpoint for POST
+    
+    // Try different possible POST endpoints
+    const POST_ENDPOINTS = [
+      `${API_BASE_URL}/streetlight-events`,  // Same as GET
+      `${API_BASE_URL}/streetlight-events/add`,
+      `${API_BASE_URL}/streetlight-events/create`,
+      `${API_BASE_URL}/streetlight-events/new`,
+      `${API_BASE_URL}/add-streetlight-event`,
+      `${API_BASE_URL}/create-streetlight-event`
+    ];
 
     let map;
     let markers = [];
     let markerObjects = [];
-    let isAddingMode = false;
+    let lastEventData = null;
+    let currentPostEndpointIndex = 0;
     
     // DOM Elements
     const timestampEl = document.getElementById('timestamp');
     const addEventForm = document.getElementById('addEventForm');
     const statusMessage = document.getElementById('statusMessage');
     const refreshBtn = document.getElementById('refreshBtn');
-    const toggleEventsBtn = document.getElementById('toggleEventsBtn');
+    const debugBtn = document.getElementById('debugBtn');
+    const debugPanel = document.getElementById('debugPanel');
+    const debugContent = document.getElementById('debugContent');
+    const testEndpointBtn = document.getElementById('testEndpointBtn');
     const eventListEl = document.getElementById('eventList');
     const coordinatesEl = document.getElementById('coordinates');
 
@@ -327,25 +378,34 @@
         const { lat, lng } = e.latlng;
         coordinatesEl.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
         
-        // If in adding mode, auto-fill the form
-        if (isAddingMode) {
-          document.getElementById('lat').value = lat.toFixed(6);
-          document.getElementById('lon').value = lng.toFixed(6);
-        }
+        // Auto-fill the form
+        document.getElementById('lat').value = lat.toFixed(6);
+        document.getElementById('lon').value = lng.toFixed(6);
       });
     }
 
     // Fetch events from API
     async function fetchEvents() {
       try {
+        showStatus('Fetching events...', 'info');
         const res = await fetch(GET_EVENTS_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         const events = await res.json();
+        
+        // Debug: Log the structure of first event
+        if (events && events.length > 0) {
+          console.log('Sample event structure:', events[0]);
+          debugLog('GET Response Sample:', JSON.stringify(events[0], null, 2));
+        }
+        
         updateMarkers(events);
+        showStatus(`Loaded ${events.length} events`, 'success');
+        setTimeout(() => hideStatus(), 2000);
         return events;
       } catch (err) {
         showStatus(`Error loading data: ${err.message}`, 'error');
         timestampEl.textContent = 'Error loading data';
+        debugLog('Fetch Error:', err.message);
         return [];
       }
     }
@@ -359,12 +419,13 @@
 
       if (!events || events.length === 0) {
         timestampEl.textContent = 'No streetlight events yet';
+        eventListEl.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">No events found</div>';
         return;
       }
 
       // Get latest event timestamp
       const latest = events[0];
-      const date = new Date(latest.time);
+      const date = new Date(latest.time || latest.timestamp || latest.createdAt);
       timestampEl.textContent = `Latest: ${date.toLocaleString()}`;
 
       // Add markers for each event
@@ -374,12 +435,16 @@
         const icon = e.status === 'OFF' ? offIcon : onIcon;
         const marker = L.marker([e.lat, e.lon], { icon }).addTo(map);
         
+        const time = e.time || e.timestamp || e.createdAt;
+        const flightId = e.flight_id || e.flightId || e.flight || 'N/A';
+        const lux = e.lux || e.light_level || e.brightness || 'N/A';
+        
         marker.bindPopup(`
           <div style="font-size: 14px;">
-            <b>Status:</b> <span class="${e.status === 'ON' ? 'status-ON' : 'status-OFF'}">${e.status}</span><br/>
-            <b>Lux:</b> ${e.lux}<br/>
-            <b>Time:</b> ${new Date(e.time).toLocaleString()}<br/>
-            <b>Flight:</b> ${e.flight_id || 'N/A'}<br/>
+            <b>Status:</b> <span style="color: ${e.status === 'ON' ? 'green' : 'red'}">${e.status}</span><br/>
+            <b>Lux:</b> ${lux}<br/>
+            <b>Time:</b> ${new Date(time).toLocaleString()}<br/>
+            <b>Flight:</b> ${flightId}<br/>
             <b>Location:</b> ${e.lat.toFixed(6)}, ${e.lon.toFixed(6)}
           </div>
         `);
@@ -390,47 +455,114 @@
           lat: e.lat,
           lon: e.lon,
           status: e.status,
-          lux: e.lux,
-          time: e.time,
-          flight_id: e.flight_id
+          lux: lux,
+          time: time,
+          flight_id: flightId,
+          rawData: e
         });
       });
 
       refreshEventList();
     }
 
-    // Add new event to API
-    async function addNewEvent(eventData) {
+    // Try different POST endpoints
+    async function tryAddEvent(eventData, endpointIndex = 0) {
+      if (endpointIndex >= POST_ENDPOINTS.length) {
+        throw new Error('All endpoints failed');
+      }
+      
+      const endpoint = POST_ENDPOINTS[endpointIndex];
+      showStatus(`Trying endpoint: ${endpoint}`, 'info');
+      
+      debugLog(`Trying POST to: ${endpoint}`, JSON.stringify(eventData, null, 2));
+      
       try {
-        showStatus('Adding event...', 'info');
-        
-        const response = await fetch(POST_EVENT_URL, {
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
           body: JSON.stringify(eventData)
         });
 
+        debugLog(`Response Status: ${response.status}`, await response.text().catch(e => 'Could not read response'));
+        
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          throw new Error(`HTTP ${response.status}`);
         }
 
         const result = await response.json();
-        showStatus('Event added successfully!', 'success');
+        showStatus(`Success! Event added via ${endpoint}`, 'success');
+        currentPostEndpointIndex = endpointIndex; // Remember successful endpoint
+        
+        // Refresh events
+        setTimeout(fetchEvents, 1000);
+        
+        return { success: true, endpoint, data: result };
+      } catch (err) {
+        // Try next endpoint
+        if (endpointIndex < POST_ENDPOINTS.length - 1) {
+          return tryAddEvent(eventData, endpointIndex + 1);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // Add new event to API
+    async function addNewEvent(eventData) {
+      try {
+        showStatus('Trying to add event...', 'info');
+        lastEventData = eventData; // Store for debugging
+        
+        const result = await tryAddEvent(eventData);
         
         // Clear form
         addEventForm.reset();
         
-        // Refresh the events list
-        setTimeout(fetchEvents, 1000);
-        
         return result;
       } catch (err) {
-        showStatus(`Error adding event: ${err.message}`, 'error');
+        showStatus(`Error: All endpoints failed. Check debug panel.`, 'error');
+        debugLog('All endpoints failed. Last attempt data:', JSON.stringify(eventData, null, 2));
         console.error('Add event error:', err);
         throw err;
       }
+    }
+
+    // Test all endpoints
+    async function testEndpoints() {
+      showStatus('Testing endpoints...', 'info');
+      debugLog('Testing all POST endpoints:', '');
+      
+      const testData = {
+        lat: 5.70,
+        lon: 115.94,
+        status: 'ON',
+        lux: 100,
+        flight_id: 'test_flight',
+        time: new Date().toISOString()
+      };
+      
+      for (let i = 0; i < POST_ENDPOINTS.length; i++) {
+        const endpoint = POST_ENDPOINTS[i];
+        debugLog(`\n--- Testing ${endpoint} ---`, '');
+        
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testData)
+          });
+          
+          const responseText = await response.text();
+          debugLog(`Status: ${response.status}`, `Response: ${responseText.substring(0, 200)}...`);
+        } catch (err) {
+          debugLog(`Error:`, err.message);
+        }
+      }
+      
+      showStatus('Endpoint test complete. Check debug panel.', 'info');
     }
 
     // Refresh event list in sidebar
@@ -451,13 +583,16 @@
         
         const date = new Date(obj.time);
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = date.toLocaleDateString();
         
         item.innerHTML = `
           <div>
-            <span class="event-item status-${obj.status}">${obj.status}</span>
-            <span>Lux: ${obj.lux}</span>
+            <span style="color: ${obj.status === 'ON' ? 'green' : 'red'}">●</span>
+            <strong>${obj.status}</strong>
+            <span style="float: right;">Lux: ${obj.lux}</span>
           </div>
-          <div class="event-time">${timeStr} • ${obj.lat.toFixed(4)}, ${obj.lon.toFixed(4)}</div>
+          <div class="event-time">${dateStr} ${timeStr}</div>
+          <div class="event-time">${obj.lat.toFixed(4)}, ${obj.lon.toFixed(4)}</div>
         `;
         
         item.onclick = () => {
@@ -478,14 +613,23 @@
         statusMessage.classList.add('status-success');
       } else if (type === 'error') {
         statusMessage.classList.add('status-error');
+      } else if (type === 'info') {
+        statusMessage.classList.add('status-info');
       }
       
-      // Auto-hide success messages after 3 seconds
-      if (type === 'success') {
-        setTimeout(() => {
-          statusMessage.style.display = 'none';
-        }, 3000);
-      }
+      statusMessage.style.display = 'block';
+    }
+
+    function hideStatus() {
+      statusMessage.style.display = 'none';
+    }
+
+    // Debug logging
+    function debugLog(title, content) {
+      const timestamp = new Date().toLocaleTimeString();
+      const logEntry = `[${timestamp}] ${title}\n${content}\n\n`;
+      debugContent.textContent = logEntry + debugContent.textContent;
+      console.log(`[DEBUG] ${title}`, content);
     }
 
     // Event Listeners
@@ -497,27 +641,42 @@
         lon: parseFloat(document.getElementById('lon').value),
         status: document.getElementById('status').value,
         lux: parseFloat(document.getElementById('lux').value),
-        flight_id: document.getElementById('flight_id').value || null,
+        flight_id: document.getElementById('flight_id').value || undefined,
         time: new Date().toISOString()
       };
       
+      // Also try alternative field names
+      const alternativeData = {
+        ...eventData,
+        flightId: eventData.flight_id,
+        timestamp: eventData.time,
+        light_level: eventData.lux,
+        brightness: eventData.lux
+      };
+      
       try {
+        // First try with original field names
         await addNewEvent(eventData);
       } catch (err) {
-        // Error already shown in addNewEvent function
+        // If that fails, try with alternative field names
+        debugLog('Original failed, trying alternative field names...', '');
+        try {
+          await addNewEvent(alternativeData);
+        } catch (err2) {
+          showStatus('All attempts failed. Check server logs.', 'error');
+        }
       }
     });
 
     refreshBtn.addEventListener('click', () => {
       fetchEvents();
-      showStatus('Refreshing data...', 'info');
     });
 
-    toggleEventsBtn.addEventListener('click', () => {
-      const isVisible = eventListEl.style.display !== 'none';
-      eventListEl.style.display = isVisible ? 'none' : 'block';
-      toggleEventsBtn.textContent = isVisible ? 'Show Events' : 'Hide Events';
+    debugBtn.addEventListener('click', () => {
+      debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
     });
+
+    testEndpointBtn.addEventListener('click', testEndpoints);
 
     // Initialize everything when page loads
     window.onload = () => {
@@ -527,8 +686,10 @@
       // Auto-refresh every 10 seconds
       setInterval(fetchEvents, 10000);
       
-      // Show events list by default
-      eventListEl.style.display = 'block';
+      // Set default coordinates
+      document.getElementById('lat').value = '5.70';
+      document.getElementById('lon').value = '115.94';
+      document.getElementById('lux').value = '150';
     };
   </script>
 </body>
