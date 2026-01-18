@@ -1,117 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Streetlight DB Sync Debugger</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, sans-serif;
+}
+
+#map { height: 100%; }
+
+.panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 420px;
+  background: rgba(255,255,255,0.97);
+  padding: 15px;
+  border-radius: 8px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  max-height: 95vh;
+  overflow-y: auto;
+}
+
+h3 { margin: 10px 0 5px; font-size: 15px; }
+
+label {
+  font-size: 13px;
+  margin-top: 6px;
+  display: block;
+}
+
+input, select {
+  width: 100%;
+  padding: 7px;
+  margin-top: 3px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 9px;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  background: #007bff;
+  color: white;
+}
+
+button.secondary { background: #6c757d; }
+button.danger { background: #dc3545; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 5px;
+  text-align: center;
+}
+
+th { background: #f2f2f2; }
+
+tr:hover { background: #e6f2ff; cursor: pointer; }
+
+.on { color: green; font-weight: bold; }
+.off { color: red; font-weight: bold; }
+
+.synced { background: #d4edda; }
+.unsynced { background: #fff3cd; }
+
+.actions button {
+  width: auto;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+#msg { margin-top: 6px; font-size: 13px; }
+
+#coords {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.9);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1000;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+<h3>➕ / ✏️ Streetlight (Local DB)</h3>
+
+<form id="eventForm">
+  <input type="hidden" id="editIndex">
+
+  <label>Latitude</label>
+  <input type="number" id="lat" step="any" required>
+
+  <label>Longitude</label>
+  <input type="number" id="lon" step="any" required>
+
+  <label>Status</label>
+  <select id="status">
+    <option value="ON">ON</option>
+    <option value="OFF">OFF</option>
+  </select>
+
+  <label>Lux</label>
+  <input type="number" id="lux" step="any" required>
+
+  <button type="submit">Save</button>
+  <button type="button" class="secondary" onclick="resetForm()">Cancel Edit</button>
+</form>
+
+<div id="msg"></div>
+
+<h3>📊 Local DB (Staging)</h3>
+<table>
+<thead>
+<tr>
+  <th>Sync</th>
+  <th>Status</th>
+  <th>Lux</th>
+  <th>Lat</th>
+  <th>Lon</th>
+  <th>Actions</th>
+</tr>
+</thead>
+<tbody id="localTable"></tbody>
+</table>
+
+<h3>🗄 Backend DB (Read-only)</h3>
+<table>
+<thead>
+<tr>
+  <th>Status</th>
+  <th>Lux</th>
+  <th>Lat</th>
+  <th>Lon</th>
+</tr>
+</thead>
+<tbody id="backendTable"></tbody>
+</table>
+</div>
+
+<div id="coords">Click map to fill coordinates</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
 <script>
 const BACKEND_URL = 'https://drone-backend-1oq4.onrender.com/streetlight-events';
 
-let map;
-let markers = [];
-let backendDB = [];
+let map, markers=[];
+let backendDB=[];
 let localDB = JSON.parse(localStorage.getItem('localStreetlights')) || [];
 
 // ---------- UTIL ----------
-function nowUTC() {
-  return new Date().toISOString().replace('T',' ').replace(/\.\d+Z$/,'+00');
-}
-
-function coordKey(e) {
-  return `${e.lat.toFixed(6)}_${e.lon.toFixed(6)}`;
-}
-
-function showMsg(text, ok = true) {
-  msg.textContent = text;
-  msg.style.color = ok ? 'green' : 'red';
-}
-
-function saveLocal() {
-  localStorage.setItem('localStreetlights', JSON.stringify(localDB));
-}
+const coordKey = e => `${e.lat.toFixed(6)}_${e.lon.toFixed(6)}`;
+const saveLocal = () => localStorage.setItem('localStreetlights', JSON.stringify(localDB));
+const showMsg = (t, ok=true) => { msg.textContent=t; msg.style.color=ok?'green':'red'; };
+const nowUTC = () => new Date().toISOString().replace('T',' ').replace(/\.\d+Z$/,'+00');
 
 // ---------- MAP ----------
-function initMap() {
-  map = L.map('map').setView([5.7, 115.94], 14);
+function initMap(){
+  map=L.map('map').setView([5.7,115.94],14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  map.on('click', e => {
-    lat.value = e.latlng.lat.toFixed(6);
-    lon.value = e.latlng.lng.toFixed(6);
-    coords.textContent = `Lat: ${lat.value}, Lon: ${lon.value}`;
+  map.on('click',e=>{
+    lat.value=e.latlng.lat.toFixed(6);
+    lon.value=e.latlng.lng.toFixed(6);
+    coords.textContent=`Lat:${lat.value}, Lon:${lon.value}`;
   });
 }
 
-// ---------- LOAD BACKEND ----------
-async function loadBackend() {
-  const res = await fetch(BACKEND_URL);
-  backendDB = await res.json();
+// ---------- BACKEND ----------
+async function loadBackend(){
+  const r=await fetch(BACKEND_URL);
+  backendDB=await r.json();
 }
 
 // ---------- RENDER ----------
-function render() {
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
-  localTable.innerHTML = '';
-  backendTable.innerHTML = '';
+function render(){
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+  localTable.innerHTML='';
+  backendTable.innerHTML='';
 
-  const backendKeys = new Set(backendDB.map(coordKey));
+  const backendKeys=new Set(backendDB.map(coordKey));
 
-  // Backend
-  backendDB.forEach(e => {
-    const m = L.marker([e.lat, e.lon]).addTo(map);
+  backendDB.forEach(e=>{
+    const m=L.marker([e.lat,e.lon]).addTo(map);
     markers.push(m);
-
-    backendTable.innerHTML += `
+    backendTable.innerHTML+=`
       <tr>
-        <td class="${e.status === 'ON' ? 'on' : 'off'}">${e.status}</td>
+        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
         <td>${e.lux}</td>
         <td>${e.lat.toFixed(4)}</td>
         <td>${e.lon.toFixed(4)}</td>
       </tr>`;
   });
 
-  // Local
-  localDB.forEach((e, i) => {
-    const synced = backendKeys.has(coordKey(e));
-
-    const m = L.circleMarker([e.lat, e.lon], {
-      radius: 6,
-      color: synced ? 'green' : 'orange'
+  localDB.forEach((e,i)=>{
+    const synced=backendKeys.has(coordKey(e));
+    const m=L.circleMarker([e.lat,e.lon],{
+      radius:6,color:synced?'green':'orange'
     }).addTo(map);
     markers.push(m);
 
-    localTable.innerHTML += `
-      <tr class="${synced ? 'synced' : 'unsynced'}">
-        <td>${synced ? 'SYNCED' : 'NOT SYNCED'}</td>
-        <td class="${e.status === 'ON' ? 'on' : 'off'}">${e.status}</td>
+    localTable.innerHTML+=`
+      <tr class="${synced?'synced':'unsynced'}">
+        <td>${synced?'SYNCED':'NOT SYNCED'}</td>
+        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
         <td>${e.lux}</td>
         <td>${e.lat.toFixed(4)}</td>
         <td>${e.lon.toFixed(4)}</td>
-        <td>
+        <td class="actions">
           <button onclick="editEntry(${i})">Edit</button>
-          <button onclick="deleteEntry(${i})" style="background:#dc3545">Delete</button>
+          <button class="danger" onclick="deleteEntry(${i})">Del</button>
         </td>
       </tr>`;
   });
 }
 
 // ---------- CRUD ----------
-eventForm.addEventListener('submit', e => {
+eventForm.addEventListener('submit',e=>{
   e.preventDefault();
 
-  const entry = {
-    lat: +lat.value,
-    lon: +lon.value,
-    status: status.value,
-    lux: +lux.value,
-    time: nowUTC()
+  const entry={
+    lat:+lat.value,
+    lon:+lon.value,
+    status:status.value,
+    lux:+lux.value,
+    time:nowUTC()
   };
 
-  if (editIndex.value !== '') {
-    localDB[editIndex.value] = entry;
+  if(editIndex.value!==''){
+    localDB[editIndex.value]=entry;
     showMsg('Entry updated');
   } else {
-    if (localDB.some(e => coordKey(e) === coordKey(entry))) {
-      showMsg('Already exists in local DB', false);
+    if(localDB.some(e=>coordKey(e)===coordKey(entry))){
+      showMsg('Duplicate coordinate',false);
       return;
     }
     localDB.push(entry);
-    showMsg('Saved locally');
+    showMsg('Entry added');
   }
 
   saveLocal();
@@ -119,33 +272,36 @@ eventForm.addEventListener('submit', e => {
   resetForm();
 });
 
-function editEntry(i) {
-  const e = localDB[i];
-  lat.value = e.lat;
-  lon.value = e.lon;
-  status.value = e.status;
-  lux.value = e.lux;
-  editIndex.value = i;
+function editEntry(i){
+  const e=localDB[i];
+  lat.value=e.lat;
+  lon.value=e.lon;
+  status.value=e.status;
+  lux.value=e.lux;
+  editIndex.value=i;
   showMsg('Editing entry');
 }
 
-function deleteEntry(i) {
-  if (!confirm('Delete this entry?')) return;
-  localDB.splice(i, 1);
+function deleteEntry(i){
+  if(!confirm('Delete this entry?')) return;
+  localDB.splice(i,1);
   saveLocal();
   render();
   showMsg('Entry deleted');
 }
 
-function resetForm() {
+function resetForm(){
   eventForm.reset();
-  editIndex.value = '';
+  editIndex.value='';
 }
 
 // ---------- INIT ----------
-window.onload = async () => {
+window.onload=async()=>{
   initMap();
   await loadBackend();
   render();
 };
 </script>
+
+</body>
+</html>
