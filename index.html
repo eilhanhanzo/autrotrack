@@ -78,6 +78,8 @@ th { background: #f2f2f2; }
 
 tr:hover { background: #e6f2ff; cursor: pointer; }
 
+tr.selected { background: #b8d4ff !important; font-weight: bold; }
+
 .on { color: green; font-weight: bold; }
 .off { color: red; font-weight: bold; }
 
@@ -102,6 +104,12 @@ tr:hover { background: #e6f2ff; cursor: pointer; }
   border-radius: 4px;
   font-size: 12px;
   z-index: 1000;
+}
+
+.highlight-marker {
+  border: 3px solid #007bff !important;
+  box-shadow: 0 0 10px rgba(0,123,255,0.7);
+  z-index: 1000 !important;
 }
 </style>
 </head>
@@ -172,9 +180,10 @@ tr:hover { background: #e6f2ff; cursor: pointer; }
 <script>
 const BACKEND_URL = 'https://drone-backend-1oq4.onrender.com/streetlight-events';
 
-let map, markers=[];
+let map, markers=[], highlightMarker=null;
 let backendDB=[];
 let localDB = JSON.parse(localStorage.getItem('localStreetlights')) || [];
+let selectedRow = null;
 
 // ---------- UTIL ----------
 const coordKey = e => `${e.lat.toFixed(6)}_${e.lon.toFixed(6)}`;
@@ -194,6 +203,61 @@ function initMap(){
   });
 }
 
+// Function to highlight a location on the map
+function highlightOnMap(lat, lon, fromLocalDB = true, index = null) {
+  // Remove previous highlight
+  if (highlightMarker) {
+    map.removeLayer(highlightMarker);
+    highlightMarker = null;
+  }
+  
+  // Remove previous row selection
+  if (selectedRow !== null) {
+    const prevRow = document.querySelector(`#localTable tr.selected, #backendTable tr.selected`);
+    if (prevRow) prevRow.classList.remove('selected');
+  }
+  
+  // Create highlight marker
+  highlightMarker = L.circleMarker([lat, lon], {
+    radius: 10,
+    color: '#007bff',
+    fillColor: '#007bff',
+    fillOpacity: 0.7,
+    weight: 3,
+    className: 'highlight-marker'
+  }).addTo(map);
+  
+  // Pan map to the location
+  map.panTo([lat, lon], {animate: true, duration: 0.5});
+  
+  // Highlight corresponding row in table
+  if (fromLocalDB && index !== null) {
+    const rows = document.querySelectorAll('#localTable tr');
+    if (rows[index]) {
+      rows[index].classList.add('selected');
+      selectedRow = {type: 'local', index: index};
+    }
+  } else if (!fromLocalDB && index !== null) {
+    const rows = document.querySelectorAll('#backendTable tr');
+    if (rows[index]) {
+      rows[index].classList.add('selected');
+      selectedRow = {type: 'backend', index: index};
+    }
+  }
+  
+  // Update coordinates display
+  coords.textContent = `Highlighted: Lat:${lat.toFixed(6)}, Lon:${lon.toFixed(6)}`;
+  coords.style.background = '#007bff';
+  coords.style.color = 'white';
+  
+  // Reset after 3 seconds
+  setTimeout(() => {
+    coords.textContent = 'Click map to fill coordinates';
+    coords.style.background = '';
+    coords.style.color = '';
+  }, 3000);
+}
+
 // ---------- BACKEND ----------
 async function loadBackend(){
   const r=await fetch(BACKEND_URL);
@@ -209,37 +273,61 @@ function render(){
 
   const backendKeys=new Set(backendDB.map(coordKey));
 
-  backendDB.forEach(e=>{
+  // Render backend entries
+  backendDB.forEach((e,i)=>{
     const m=L.marker([e.lat,e.lon]).addTo(map);
     markers.push(m);
-    backendTable.innerHTML+=`
-      <tr>
-        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
-        <td>${e.lux}</td>
-        <td>${e.lat.toFixed(4)}</td>
-        <td>${e.lon.toFixed(4)}</td>
-      </tr>`;
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
+      <td>${e.lux}</td>
+      <td>${e.lat.toFixed(4)}</td>
+      <td>${e.lon.toFixed(4)}</td>
+    `;
+    
+    // Add click handler to highlight on map
+    row.addEventListener('click', () => {
+      highlightOnMap(e.lat, e.lon, false, i);
+    });
+    
+    backendTable.appendChild(row);
   });
 
+  // Render local entries
   localDB.forEach((e,i)=>{
     const synced=backendKeys.has(coordKey(e));
     const m=L.circleMarker([e.lat,e.lon],{
-      radius:6,color:synced?'green':'orange'
+      radius:6,
+      color:synced?'green':'orange',
+      fillColor:synced?'green':'orange',
+      fillOpacity:0.7,
+      weight:2
     }).addTo(map);
     markers.push(m);
 
-    localTable.innerHTML+=`
-      <tr class="${synced?'synced':'unsynced'}">
-        <td>${synced?'SYNCED':'NOT SYNCED'}</td>
-        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
-        <td>${e.lux}</td>
-        <td>${e.lat.toFixed(4)}</td>
-        <td>${e.lon.toFixed(4)}</td>
-        <td class="actions">
-          <button onclick="editEntry(${i})">Edit</button>
-          <button class="danger" onclick="deleteEntry(${i})">Del</button>
-        </td>
-      </tr>`;
+    const row = document.createElement('tr');
+    row.className = synced?'synced':'unsynced';
+    row.innerHTML = `
+      <td>${synced?'SYNCED':'NOT SYNCED'}</td>
+      <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
+      <td>${e.lux}</td>
+      <td>${e.lat.toFixed(4)}</td>
+      <td>${e.lon.toFixed(4)}</td>
+      <td class="actions">
+        <button onclick="editEntry(${i}); event.stopPropagation();">Edit</button>
+        <button class="danger" onclick="deleteEntry(${i}); event.stopPropagation();">Del</button>
+      </td>
+    `;
+    
+    // Add click handler to highlight on map
+    row.addEventListener('click', (event) => {
+      if (!event.target.closest('.actions')) {
+        highlightOnMap(e.lat, e.lon, true, i);
+      }
+    });
+    
+    localTable.appendChild(row);
   });
 }
 
@@ -280,6 +368,9 @@ function editEntry(i){
   lux.value=e.lux;
   editIndex.value=i;
   showMsg('Editing entry');
+  
+  // Highlight the edited entry on map
+  highlightOnMap(e.lat, e.lon, true, i);
 }
 
 function deleteEntry(i){
