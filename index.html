@@ -2,12 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Drone DB Viewer</title>
+<title>Streetlight Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
 
 <style>
 html, body {
@@ -87,12 +85,11 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
 <script>
 const BASE_URL = "https://drone-backend-tsv0.onrender.com"; // your backend
 
-let map, markers = [], markerGroup, highlightMarker = null;
+let map, markers = [], highlightMarker = null;
 let selectedRow = null;
 let currentData = [];
 
@@ -101,8 +98,6 @@ function initMap(){
   // UMS coordinates: 6.03408, 116.118921
   map = L.map('map').setView([6.03408, 116.118921], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-  markerGroup = L.markerClusterGroup(); // cluster markers for scalability
-  map.addLayer(markerGroup);
 }
 
 // ---------- FETCH DATA ----------
@@ -121,7 +116,8 @@ async function loadTable(tableName){
 // ---------- RENDER TABLE & MAP ----------
 function renderTableAndMap(tableName, data){
   // Clear previous markers and table
-  markerGroup.clearLayers();
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
   document.getElementById('tableBody').innerHTML = '';
   document.getElementById('tableHeader').innerHTML = '';
 
@@ -154,7 +150,7 @@ function renderTableAndMap(tableName, data){
     if(lat && lon){
       const m = L.marker([lat, lon]);
       m.bindPopup(Object.entries(row).map(([k,v]) => `<b>${k}</b>: ${v}`).join('<br>'));
-      markerGroup.addLayer(m);
+      m.addTo(map);
       markers.push(m);
     }
   });
