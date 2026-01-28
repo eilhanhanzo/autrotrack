@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Streetlight & Pothole Events Viewer</title>
+<title>Streetlight Events Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
@@ -21,96 +20,104 @@ table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
 th, td { border:1px solid #ddd; padding:5px; text-align:center; }
 th { background:#f2f2f2; }
 tr:hover { background:#eef; }
-.mode-pothole { background:#ffe0e0; }
-.mode-streetlight { background:#e0f7ff; }
+.on { color:green; font-weight:bold; }
+.off { color:red; font-weight:bold; }
+#msg { margin-top:6px; font-size:13px; color:red; }
 </style>
 </head>
 
 <body>
-<div id="map"></div>
-
 <div class="panel">
-<h3>🗄 Streetlight & Pothole Events</h3>
+<h3>🌍 Streetlight Events</h3>
+<div id="msg"></div>
 <table>
 <thead>
 <tr>
-  <th>Timestamp (ms)</th>
-  <th>UTC</th>
-  <th>Fix</th>
-  <th>Quality</th>
-  <th>#Sats</th>
-  <th>Latitude</th>
-  <th>Longitude</th>
-  <th>Altitude (m)</th>
-  <th>Lux</th>
-  <th>Status</th>
+  <th>Flight</th>
   <th>Mode</th>
+  <th>Status</th>
+  <th>Lux</th>
+  <th>Lat</th>
+  <th>Lon</th>
+  <th>Altitude</th>
+  <th>UTC</th>
 </tr>
 </thead>
 <tbody id="eventTable"></tbody>
 </table>
 </div>
 
+<div id="map"></div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-const EVENTS_URL = "http://localhost:3000/streetlight_events";
+window.onload = async () => {
+  const msg = document.getElementById("msg");
+  const eventTable = document.getElementById("eventTable");
 
-let map, markers = [];
+  // Change this to your backend URL (local or deployed)
+  const EVENTS_URL = "http://localhost:3000/streetlight_events";
 
-function initMap() {
-    map = L.map('map').setView([5.7, 115.94], 14);
+  let map, markers = [], events = [];
+
+  const showMsg = t => { msg.textContent = t; };
+
+  // --- MAP SETUP ---
+  function initMap(){
+    map = L.map('map').setView([5.7,115.94],14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-}
+  }
 
-async function loadEvents() {
+  // --- LOAD DATA ---
+  async function loadEvents(){
     try {
-        const res = await fetch(EVENTS_URL);
-        const events = await res.json();
-
-        const tbody = document.getElementById("eventTable");
-        tbody.innerHTML = "";
-
-        markers.forEach(m => map.removeLayer(m));
-        markers = [];
-
-        events.forEach(e => {
-            // Table row
-            const tr = document.createElement("tr");
-            tr.className = e.mode === "pothole" ? "mode-pothole" : "mode-streetlight";
-            tr.innerHTML = `
-                <td>${e.timestamp_ms}</td>
-                <td>${e.utc_datetime}</td>
-                <td>${e.has_fix ? 1 : 0}</td>
-                <td>${e.fix_quality}</td>
-                <td>${e.num_sats}</td>
-                <td>${e.latitude.toFixed(6)}</td>
-                <td>${e.longitude.toFixed(6)}</td>
-                <td>${e.altitude_m}</td>
-                <td>${e.lux}</td>
-                <td>${e.status || ''}</td>
-                <td>${e.mode}</td>
-            `;
-            tbody.appendChild(tr);
-
-            // Map marker
-            const marker = L.circleMarker([e.latitude, e.longitude], {
-                radius: 6,
-                color: e.mode === "pothole" ? "red" : "blue",
-                fillOpacity: 0.7
-            }).addTo(map).bindPopup(
-                `Mode: ${e.mode}<br>Lux: ${e.lux}<br>Alt: ${e.altitude_m} m`
-            );
-            markers.push(marker);
-        });
-
-    } catch(err) {
-        console.error("Failed to load events:", err);
+      const res = await fetch(EVENTS_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      events = await res.json();
+      renderTableAndMap();
+      msg.textContent = "";
+    } catch(e){
+      showMsg("Failed to load events: " + e.message);
     }
-}
+  }
 
-// Initialize
-initMap();
-loadEvents();
+  // --- RENDER TABLE & MAP ---
+  function renderTableAndMap(){
+    markers.forEach(m=>map.removeLayer(m));
+    markers = [];
+    eventTable.innerHTML = "";
+
+    events.forEach(e=>{
+      // Table row
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${e.flight_id ? e.flight_id.slice(0,8) : ''}</td>
+        <td>${e.mode || ''}</td>
+        <td class="${e.status==='ON'?'on':'off'}">${e.status || ''}</td>
+        <td>${e.lux ?? ''}</td>
+        <td>${e.latitude ?? ''}</td>
+        <td>${e.longitude ?? ''}</td>
+        <td>${e.altitude_m ?? ''}</td>
+        <td>${e.utc_datetime || ''}</td>
+      `;
+      tr.onclick = () => {
+        if(e.latitude && e.longitude) map.panTo([e.latitude,e.longitude]);
+      };
+      eventTable.appendChild(tr);
+
+      // Map marker
+      if(e.latitude && e.longitude){
+        const m = L.marker([e.latitude, e.longitude]).addTo(map);
+        m.bindPopup(`Flight: ${e.flight_id || ''}<br>Mode: ${e.mode || ''}<br>Status: ${e.status || ''}`);
+        markers.push(m);
+      }
+    });
+  }
+
+  // --- INIT ---
+  initMap();
+  await loadEvents();
+};
 </script>
 </body>
 </html>
