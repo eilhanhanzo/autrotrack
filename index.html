@@ -1,10 +1,8 @@
-i already have a front end in github 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Streetlight DB Sync Debugger</title>
+<title>Streetlight Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -34,35 +32,6 @@ html, body {
 
 h3 { margin: 10px 0 5px; font-size: 15px; }
 
-label {
-  font-size: 13px;
-  margin-top: 6px;
-  display: block;
-}
-
-input, select {
-  width: 100%;
-  padding: 7px;
-  margin-top: 3px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-button {
-  margin-top: 8px;
-  width: 100%;
-  padding: 9px;
-  border: none;
-  border-radius: 4px;
-  font-weight: bold;
-  cursor: pointer;
-  background: #007bff;
-  color: white;
-}
-
-button.secondary { background: #6c757d; }
-button.danger { background: #dc3545; }
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -77,24 +46,8 @@ th, td {
 }
 
 th { background: #f2f2f2; }
-
 tr:hover { background: #e6f2ff; cursor: pointer; }
-
 tr.selected { background: #b8d4ff !important; font-weight: bold; }
-
-.on { color: green; font-weight: bold; }
-.off { color: red; font-weight: bold; }
-
-.synced { background: #d4edda; }
-.unsynced { background: #fff3cd; }
-
-.actions button {
-  width: auto;
-  padding: 4px 6px;
-  font-size: 11px;
-}
-
-#msg { margin-top: 6px; font-size: 13px; }
 
 #coords {
   position: absolute;
@@ -107,289 +60,100 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
   font-size: 12px;
   z-index: 1000;
 }
-
-.highlight-marker {
-  border: 3px solid #007bff !important;
-  box-shadow: 0 0 10px rgba(0,123,255,0.7);
-  z-index: 1000 !important;
-}
 </style>
 </head>
 
 <body>
 
 <div class="panel">
-<h3>➕ / ✏️ Streetlight (Local DB)</h3>
-
-<form id="eventForm">
-  <input type="hidden" id="editIndex">
-
-  <label>Latitude</label>
-  <input type="number" id="lat" step="any" required>
-
-  <label>Longitude</label>
-  <input type="number" id="lon" step="any" required>
-
-  <label>Status</label>
-  <select id="status">
-    <option value="ON">ON</option>
-    <option value="OFF">OFF</option>
-  </select>
-
-  <label>Lux</label>
-  <input type="number" id="lux" step="any" required>
-
-  <button type="submit">Save</button>
-  <button type="button" class="secondary" onclick="resetForm()">Cancel Edit</button>
-</form>
-
-<div id="msg"></div>
-
-<h3>📊 Local DB (Staging)</h3>
-<table>
-<thead>
-<tr>
-  <th>Sync</th>
-  <th>Status</th>
-  <th>Lux</th>
-  <th>Lat</th>
-  <th>Lon</th>
-  <th>Actions</th>
-</tr>
-</thead>
-<tbody id="localTable"></tbody>
-</table>
-
-<h3>🗄 Backend DB (Read-only)</h3>
-<table>
-<thead>
-<tr>
-  <th>Status</th>
-  <th>Lux</th>
-  <th>Lat</th>
-  <th>Lon</th>
-</tr>
-</thead>
-<tbody id="backendTable"></tbody>
-</table>
+  <h3>🗄 Streetlights (Backend DB)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Latitude</th>
+        <th>Longitude</th>
+      </tr>
+    </thead>
+    <tbody id="backendTable"></tbody>
+  </table>
 </div>
 
-<div id="coords">Click map to fill coordinates</div>
+<div id="coords">Click row to highlight</div>
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-const BACKEND_URL = 'postgresql://neondb_owner:npg_CKy37VEfXjeB@ep-silent-mouse-a1ysp626-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const BACKEND_URL = "http://localhost:3000/streetlights";
 
-let map, markers=[], highlightMarker=null;
-let backendDB=[];
-let localDB = JSON.parse(localStorage.getItem('localStreetlights')) || [];
+let map, markers = [], highlightMarker = null;
+let backendDB = [];
 let selectedRow = null;
-
-// ---------- UTIL ----------
-const coordKey = e => `${e.lat.toFixed(6)}_${e.lon.toFixed(6)}`;
-const saveLocal = () => localStorage.setItem('localStreetlights', JSON.stringify(localDB));
-const showMsg = (t, ok=true) => { msg.textContent=t; msg.style.color=ok?'green':'red'; };
-const nowUTC = () => new Date().toISOString().replace('T',' ').replace(/\.\d+Z$/,'+00');
 
 // ---------- MAP ----------
 function initMap(){
-  map=L.map('map').setView([5.7,115.94],14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-  map.on('click',e=>{
-    lat.value=e.latlng.lat.toFixed(6);
-    lon.value=e.latlng.lng.toFixed(6);
-    coords.textContent=`Lat:${lat.value}, Lon:${lon.value}`;
-  });
+  map = L.map('map').setView([5.7, 115.94], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+    .addTo(map);
 }
 
-// Function to highlight a location on the map
-function highlightOnMap(lat, lon, fromLocalDB = true, index = null) {
-  // Remove previous highlight
-  if (highlightMarker) {
-    map.removeLayer(highlightMarker);
-    highlightMarker = null;
-  }
-  
-  // Remove previous row selection
+// ---------- HIGHLIGHT ----------
+function highlightOnMap(lat, lon, index){
+  if (highlightMarker) map.removeLayer(highlightMarker);
+
   if (selectedRow !== null) {
-    const prevRow = document.querySelector(`#localTable tr.selected, #backendTable tr.selected`);
-    if (prevRow) prevRow.classList.remove('selected');
+    const prev = document.querySelector('#backendTable tr.selected');
+    if (prev) prev.classList.remove('selected');
   }
-  
-  // Create highlight marker
+
   highlightMarker = L.circleMarker([lat, lon], {
     radius: 10,
     color: '#007bff',
     fillColor: '#007bff',
     fillOpacity: 0.7,
-    weight: 3,
-    className: 'highlight-marker'
+    weight: 3
   }).addTo(map);
-  
-  // Pan map to the location
-  map.panTo([lat, lon], {animate: true, duration: 0.5});
-  
-  // Highlight corresponding row in table
-  if (fromLocalDB && index !== null) {
-    const rows = document.querySelectorAll('#localTable tr');
-    if (rows[index]) {
-      rows[index].classList.add('selected');
-      selectedRow = {type: 'local', index: index};
-    }
-  } else if (!fromLocalDB && index !== null) {
-    const rows = document.querySelectorAll('#backendTable tr');
-    if (rows[index]) {
-      rows[index].classList.add('selected');
-      selectedRow = {type: 'backend', index: index};
-    }
-  }
-  
-  // Update coordinates display
-  coords.textContent = `Highlighted: Lat:${lat.toFixed(6)}, Lon:${lon.toFixed(6)}`;
-  coords.style.background = '#007bff';
-  coords.style.color = 'white';
-  
-  // Reset after 3 seconds
-  setTimeout(() => {
-    coords.textContent = 'Click map to fill coordinates';
-    coords.style.background = '';
-    coords.style.color = '';
-  }, 3000);
+
+  map.panTo([lat, lon]);
+
+  const rows = document.querySelectorAll('#backendTable tr');
+  if (rows[index]) rows[index].classList.add('selected');
+
+  coords.textContent = `Highlighted: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
 
 // ---------- BACKEND ----------
 async function loadBackend(){
-  const r=await fetch(BACKEND_URL);
-  backendDB=await r.json();
+  const res = await fetch(BACKEND_URL);
+  backendDB = await res.json();
 }
 
 // ---------- RENDER ----------
 function render(){
-  markers.forEach(m=>map.removeLayer(m));
-  markers=[];
-  localTable.innerHTML='';
-  backendTable.innerHTML='';
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  backendTable.innerHTML = '';
 
-  const backendKeys=new Set(backendDB.map(coordKey));
-
-  // Render backend entries
-  backendDB.forEach((e,i)=>{
-    const m=L.marker([e.lat,e.lon]).addTo(map);
+  backendDB.forEach((e, i) => {
+    const m = L.marker([e.latitude, e.longitude]).addTo(map);
     markers.push(m);
-    
+
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
-      <td>${e.lux}</td>
-      <td>${e.lat.toFixed(4)}</td>
-      <td>${e.lon.toFixed(4)}</td>
+      <td>${Number(e.latitude).toFixed(5)}</td>
+      <td>${Number(e.longitude).toFixed(5)}</td>
     `;
-    
-    // Add click handler to highlight on map
+
     row.addEventListener('click', () => {
-      highlightOnMap(e.lat, e.lon, false, i);
+      highlightOnMap(e.latitude, e.longitude, i);
     });
-    
+
     backendTable.appendChild(row);
   });
-
-  // Render local entries
-  localDB.forEach((e,i)=>{
-    const synced=backendKeys.has(coordKey(e));
-    const m=L.circleMarker([e.lat,e.lon],{
-      radius:6,
-      color:synced?'green':'orange',
-      fillColor:synced?'green':'orange',
-      fillOpacity:0.7,
-      weight:2
-    }).addTo(map);
-    markers.push(m);
-
-    const row = document.createElement('tr');
-    row.className = synced?'synced':'unsynced';
-    row.innerHTML = `
-      <td>${synced?'SYNCED':'NOT SYNCED'}</td>
-      <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
-      <td>${e.lux}</td>
-      <td>${e.lat.toFixed(4)}</td>
-      <td>${e.lon.toFixed(4)}</td>
-      <td class="actions">
-        <button onclick="editEntry(${i}); event.stopPropagation();">Edit</button>
-        <button class="danger" onclick="deleteEntry(${i}); event.stopPropagation();">Del</button>
-      </td>
-    `;
-    
-    // Add click handler to highlight on map
-    row.addEventListener('click', (event) => {
-      if (!event.target.closest('.actions')) {
-        highlightOnMap(e.lat, e.lon, true, i);
-      }
-    });
-    
-    localTable.appendChild(row);
-  });
-}
-
-// ---------- CRUD ----------
-eventForm.addEventListener('submit',e=>{
-  e.preventDefault();
-
-  const entry={
-    lat:+lat.value,
-    lon:+lon.value,
-    status:status.value,
-    lux:+lux.value,
-    time:nowUTC()
-  };
-
-  if(editIndex.value!==''){
-    localDB[editIndex.value]=entry;
-    showMsg('Entry updated');
-  } else {
-    if(localDB.some(e=>coordKey(e)===coordKey(entry))){
-      showMsg('Duplicate coordinate',false);
-      return;
-    }
-    localDB.push(entry);
-    showMsg('Entry added');
-  }
-
-  saveLocal();
-  render();
-  resetForm();
-});
-
-function editEntry(i){
-  const e=localDB[i];
-  lat.value=e.lat;
-  lon.value=e.lon;
-  status.value=e.status;
-  lux.value=e.lux;
-  editIndex.value=i;
-  showMsg('Editing entry');
-  
-  // Highlight the edited entry on map
-  highlightOnMap(e.lat, e.lon, true, i);
-}
-
-function deleteEntry(i){
-  if(!confirm('Delete this entry?')) return;
-  localDB.splice(i,1);
-  saveLocal();
-  render();
-  showMsg('Entry deleted');
-}
-
-function resetForm(){
-  eventForm.reset();
-  editIndex.value='';
 }
 
 // ---------- INIT ----------
-window.onload=async()=>{
+window.onload = async () => {
   initMap();
   await loadBackend();
   render();
