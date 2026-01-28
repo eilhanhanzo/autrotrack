@@ -8,115 +8,109 @@
 
 <style>
 html, body { margin:0; height:100%; font-family:system-ui; }
-#map { height:60%; }
-
+#map { height:50%; }
 .panel {
   padding:14px;
-  max-height:40%;
+  max-height:50%;
   overflow:auto;
+  background:#f9f9f9;
 }
-
-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
 th, td { border:1px solid #ddd; padding:5px; text-align:center; }
 th { background:#f2f2f2; }
 tr:hover { background:#eef; }
 .on { color:green; font-weight:bold; }
 .off { color:red; font-weight:bold; }
-#msg { margin-top:6px; font-size:13px; color:red; }
 </style>
 </head>
 
 <body>
+<div id="map"></div>
+
 <div class="panel">
 <h3>🌍 Streetlight Events</h3>
-<div id="msg"></div>
 <table>
 <thead>
 <tr>
-  <th>Flight</th>
-  <th>Mode</th>
-  <th>Status</th>
-  <th>Lux</th>
+  <th>Timestamp</th>
+  <th>Has Fix</th>
+  <th>Fix Quality</th>
+  <th>Num Sats</th>
   <th>Lat</th>
   <th>Lon</th>
-  <th>Altitude</th>
-  <th>UTC</th>
+  <th>Alt (m)</th>
+  <th>Lux</th>
+  <th>Status</th>
+  <th>Mode</th>
 </tr>
 </thead>
 <tbody id="eventTable"></tbody>
 </table>
+<div id="msg"></div>
 </div>
-
-<div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-window.onload = async () => {
+const EVENT_URL = "https://drone-backend-1oq4.onrender.com/streetlights";
+
+let map, markers = [];
+
+function showMsg(text, ok=true) {
   const msg = document.getElementById("msg");
-  const eventTable = document.getElementById("eventTable");
+  msg.textContent = text;
+  msg.style.color = ok ? "green" : "red";
+}
 
-  // Change this to your backend URL (local or deployed)
-  const EVENTS_URL = "https://drone-backend-1oq4.onrender.com/streetlight_events";
+function initMap() {
+  map = L.map('map').setView([5.7, 115.94], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+}
 
-  let map, markers = [], events = [];
+async function loadEvents() {
+  try {
+    const res = await fetch(EVENT_URL);
+    if (!res.ok) throw new Error(res.status);
+    const events = await res.json();
 
-  const showMsg = t => { msg.textContent = t; };
+    const tbody = document.getElementById("eventTable");
+    tbody.innerHTML = "";
 
-  // --- MAP SETUP ---
-  function initMap(){
-    map = L.map('map').setView([5.7,115.94],14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-  }
-
-  // --- LOAD DATA ---
-  async function loadEvents(){
-    try {
-      const res = await fetch(EVENTS_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      events = await res.json();
-      renderTableAndMap();
-      msg.textContent = "";
-    } catch(e){
-      showMsg("Failed to load events: " + e.message);
-    }
-  }
-
-  // --- RENDER TABLE & MAP ---
-  function renderTableAndMap(){
-    markers.forEach(m=>map.removeLayer(m));
+    markers.forEach(m => map.removeLayer(m));
     markers = [];
-    eventTable.innerHTML = "";
 
-    events.forEach(e=>{
+    events.forEach(e => {
       // Table row
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${e.flight_id ? e.flight_id.slice(0,8) : ''}</td>
+        <td>${e.utc_datetime}</td>
+        <td>${e.has_fix}</td>
+        <td>${e.fix_quality}</td>
+        <td>${e.num_sats}</td>
+        <td>${e.latitude.toFixed(6)}</td>
+        <td>${e.longitude.toFixed(6)}</td>
+        <td>${e.altitude_m}</td>
+        <td>${e.lux.toFixed(2)}</td>
+        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
         <td>${e.mode || ''}</td>
-        <td class="${e.status==='ON'?'on':'off'}">${e.status || ''}</td>
-        <td>${e.lux ?? ''}</td>
-        <td>${e.latitude ?? ''}</td>
-        <td>${e.longitude ?? ''}</td>
-        <td>${e.altitude_m ?? ''}</td>
-        <td>${e.utc_datetime || ''}</td>
       `;
-      tr.onclick = () => {
-        if(e.latitude && e.longitude) map.panTo([e.latitude,e.longitude]);
-      };
-      eventTable.appendChild(tr);
+      tbody.appendChild(tr);
 
       // Map marker
-      if(e.latitude && e.longitude){
-        const m = L.marker([e.latitude, e.longitude]).addTo(map);
-        m.bindPopup(`Flight: ${e.flight_id || ''}<br>Mode: ${e.mode || ''}<br>Status: ${e.status || ''}`);
-        markers.push(m);
-      }
+      const marker = L.marker([e.latitude, e.longitude]).addTo(map);
+      marker.bindPopup(`Lux: ${e.lux.toFixed(2)}<br>Status: ${e.status}<br>Mode: ${e.mode || ''}`);
+      markers.push(marker);
     });
-  }
 
-  // --- INIT ---
+    showMsg(`Loaded ${events.length} events.`);
+  } catch (err) {
+    console.error(err);
+    showMsg("Failed to load events.", false);
+  }
+}
+
+window.onload = () => {
   initMap();
-  await loadEvents();
+  loadEvents();
 };
 </script>
 </body>
