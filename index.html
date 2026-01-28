@@ -5,7 +5,6 @@
 <title>Streetlight Events Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
 <style>
 html, body { margin:0; height:100%; font-family:system-ui; }
 #map { height:50%; }
@@ -23,10 +22,8 @@ tr:hover { background:#eef; }
 .off { color:red; font-weight:bold; }
 </style>
 </head>
-
 <body>
 <div id="map"></div>
-
 <div class="panel">
 <h3>🌍 Streetlight Events</h3>
 <table>
@@ -75,30 +72,33 @@ async function loadEvents() {
     const tbody = document.getElementById("eventTable");
     tbody.innerHTML = "";
 
+    // remove previous markers
     markers.forEach(m => map.removeLayer(m));
     markers = [];
 
     events.forEach(e => {
-      // Table row
+      // Table row with null checks
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${e.utc_datetime}</td>
-        <td>${e.has_fix}</td>
-        <td>${e.fix_quality}</td>
-        <td>${e.num_sats}</td>
-        <td>${e.latitude.toFixed(6)}</td>
-        <td>${e.longitude.toFixed(6)}</td>
-        <td>${e.altitude_m}</td>
-        <td>${e.lux.toFixed(2)}</td>
-        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
-        <td>${e.mode || ''}</td>
+        <td>${e.utc_datetime || '-'}</td>
+        <td>${e.has_fix != null ? e.has_fix : '-'}</td>
+        <td>${e.fix_quality != null ? e.fix_quality : '-'}</td>
+        <td>${e.num_sats != null ? e.num_sats : '-'}</td>
+        <td>${e.latitude != null ? e.latitude.toFixed(6) : '-'}</td>
+        <td>${e.longitude != null ? e.longitude.toFixed(6) : '-'}</td>
+        <td>${e.altitude_m != null ? e.altitude_m : '-'}</td>
+        <td>${e.lux != null ? e.lux.toFixed(2) : '-'}</td>
+        <td class="${e.status==='ON'?'on':(e.status==='OFF'?'off':'')}">${e.status || '-'}</td>
+        <td>${e.mode || '-'}</td>
       `;
       tbody.appendChild(tr);
 
-      // Map marker
-      const marker = L.marker([e.latitude, e.longitude]).addTo(map);
-      marker.bindPopup(`Lux: ${e.lux.toFixed(2)}<br>Status: ${e.status}<br>Mode: ${e.mode || ''}`);
-      markers.push(marker);
+      // Map marker only if lat/lon exists
+      if (e.latitude != null && e.longitude != null) {
+        const marker = L.marker([e.latitude, e.longitude]).addTo(map);
+        marker.bindPopup(`Lux: ${e.lux != null ? e.lux.toFixed(2) : '-'}<br>Status: ${e.status || '-'}<br>Mode: ${e.mode || '-'}`);
+        markers.push(marker);
+      }
     });
 
     showMsg(`Loaded ${events.length} events.`);
