@@ -2,246 +2,115 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Streetlight Event Manager</title>
+<title>Streetlight & Pothole Events Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
 html, body { margin:0; height:100%; font-family:system-ui; }
-#map { height:100%; }
+#map { height:60%; }
 
 .panel {
-  position:absolute;
-  top:10px; left:10px;
-  width:420px;
-  background:#fff;
   padding:14px;
-  border-radius:8px;
-  z-index:1000;
-  box-shadow:0 4px 12px rgba(0,0,0,.2);
-  max-height:95vh;
+  max-height:40%;
   overflow:auto;
 }
 
-label { font-size:13px; display:block; margin-top:8px; }
-input, select { width:100%; padding:7px; margin-top:4px; }
-
-button { margin-top:10px; width:100%; padding:9px; font-weight:bold; border:none; border-radius:4px; cursor:pointer; }
-.primary { background:#007bff; color:white; }
-.danger { background:#dc3545; color:white; }
-
-table { width:100%; border-collapse:collapse; font-size:11px; margin-top:8px; }
+table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
 th, td { border:1px solid #ddd; padding:5px; text-align:center; }
 th { background:#f2f2f2; }
-tr:hover { background:#eef; cursor:pointer; }
-.selected { background:#b8d4ff !important; }
-.on { color:green; font-weight:bold; }
-.off { color:red; font-weight:bold; }
-#msg { margin-top:6px; font-size:13px; }
+tr:hover { background:#eef; }
+.mode-pothole { background:#ffe0e0; }
+.mode-streetlight { background:#e0f7ff; }
 </style>
 </head>
 
 <body>
+<div id="map"></div>
+
 <div class="panel">
-<h3>🌍 Streetlight Event</h3>
-
-<form id="eventForm">
-<input type="hidden" id="editId">
-
-<label>Flight</label>
-<select id="flightSelect" required></select>
-
-<label>Latitude</label>
-<input type="number" id="lat" step="any" required>
-
-<label>Longitude</label>
-<input type="number" id="lon" step="any" required>
-
-<label>Status</label>
-<select id="status">
-  <option value="ON">ON</option>
-  <option value="OFF">OFF</option>
-</select>
-
-<label>Lux</label>
-<input type="number" id="lux" step="any" required>
-
-<button class="primary" type="submit">Save</button>
-<button type="button" onclick="resetForm()">Cancel</button>
-</form>
-
-<div id="msg"></div>
-
-<h3>🗄 Streetlight Events</h3>
+<h3>🗄 Streetlight & Pothole Events</h3>
 <table>
 <thead>
 <tr>
-  <th>Flight</th>
-  <th>Status</th>
+  <th>Timestamp (ms)</th>
+  <th>UTC</th>
+  <th>Fix</th>
+  <th>Quality</th>
+  <th>#Sats</th>
+  <th>Latitude</th>
+  <th>Longitude</th>
+  <th>Altitude (m)</th>
   <th>Lux</th>
-  <th>Lat</th>
-  <th>Lon</th>
-  <th>Actions</th>
+  <th>Status</th>
+  <th>Mode</th>
 </tr>
 </thead>
 <tbody id="eventTable"></tbody>
 </table>
 </div>
 
-<div id="map"></div>
-
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-window.onload = async () => {
-  // ---- ELEMENTS ----
-  const eventForm = document.getElementById("eventForm");
-  const editId = document.getElementById("editId");
-  const flightSelect = document.getElementById("flightSelect");
-  const lat = document.getElementById("lat");
-  const lon = document.getElementById("lon");
-  const lux = document.getElementById("lux");
-  const status = document.getElementById("status");
-  const msg = document.getElementById("msg");
-  const eventTable = document.getElementById("eventTable");
+const EVENTS_URL = "http://localhost:3000/streetlight_events";
 
-  const EVENTS_URL = "http://localhost:3000/streetlights";
-  const FLIGHTS_URL = "http://localhost:3000/flights";
+let map, markers = [];
 
-  let map, markers=[], flights=[], events=[];
-
-  // ---- UTIL ----
-  const showMsg = (t, ok=true) => {
-    msg.textContent = t;
-    msg.style.color = ok ? "green" : "red";
-  };
-  const nowUTC = () => new Date().toISOString();
-
-  // ---- MAP ----
-  function initMap(){
-    map = L.map('map').setView([5.7,115.94],14);
+function initMap() {
+    map = L.map('map').setView([5.7, 115.94], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+}
 
-    map.on('click', e=>{
-      lat.value = e.latlng.lat.toFixed(6);
-      lon.value = e.latlng.lng.toFixed(6);
-    });
-  }
+async function loadEvents() {
+    try {
+        const res = await fetch(EVENTS_URL);
+        const events = await res.json();
 
-  // ---- LOAD DATA ----
-  async function loadFlights(){
-    try{
-      const r = await fetch(FLIGHTS_URL);
-      flights = await r.json();
-      flightSelect.innerHTML="";
-      flights.forEach(f=>{
-        const o = document.createElement("option");
-        o.value = f.id;
-        o.textContent = f.name || f.id;
-        flightSelect.appendChild(o);
-      });
-    } catch(e){
-      showMsg("Failed to load flights", false);
+        const tbody = document.getElementById("eventTable");
+        tbody.innerHTML = "";
+
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+
+        events.forEach(e => {
+            // Table row
+            const tr = document.createElement("tr");
+            tr.className = e.mode === "pothole" ? "mode-pothole" : "mode-streetlight";
+            tr.innerHTML = `
+                <td>${e.timestamp_ms}</td>
+                <td>${e.utc_datetime}</td>
+                <td>${e.has_fix ? 1 : 0}</td>
+                <td>${e.fix_quality}</td>
+                <td>${e.num_sats}</td>
+                <td>${e.latitude.toFixed(6)}</td>
+                <td>${e.longitude.toFixed(6)}</td>
+                <td>${e.altitude_m}</td>
+                <td>${e.lux}</td>
+                <td>${e.status || ''}</td>
+                <td>${e.mode}</td>
+            `;
+            tbody.appendChild(tr);
+
+            // Map marker
+            const marker = L.circleMarker([e.latitude, e.longitude], {
+                radius: 6,
+                color: e.mode === "pothole" ? "red" : "blue",
+                fillOpacity: 0.7
+            }).addTo(map).bindPopup(
+                `Mode: ${e.mode}<br>Lux: ${e.lux}<br>Alt: ${e.altitude_m} m`
+            );
+            markers.push(marker);
+        });
+
+    } catch(err) {
+        console.error("Failed to load events:", err);
     }
-  }
+}
 
-  async function loadEvents(){
-    try{
-      const r = await fetch(EVENTS_URL);
-      events = await r.json();
-    } catch(e){
-      showMsg("Failed to load events", false);
-    }
-  }
-
-  // ---- RENDER TABLE & MAP ----
-  function render(){
-    markers.forEach(m=>map.removeLayer(m));
-    markers=[];
-    eventTable.innerHTML="";
-
-    events.forEach((e,i)=>{
-      const m = L.marker([e.lat,e.lon]).addTo(map);
-      markers.push(m);
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${e.flight_id.slice(0,8)}</td>
-        <td class="${e.status==='ON'?'on':'off'}">${e.status}</td>
-        <td>${e.lux}</td>
-        <td>${e.lat.toFixed(4)}</td>
-        <td>${e.lon.toFixed(4)}</td>
-        <td>
-          <button onclick="editEvent('${e.id}',${i})">Edit</button>
-          <button class="danger" onclick="deleteEvent('${e.id}')">Del</button>
-        </td>
-      `;
-      tr.onclick = () => { map.panTo([e.lat,e.lon]); tr.classList.add("selected"); };
-      eventTable.appendChild(tr);
-    });
-  }
-
-  // ---- ADD / UPDATE ----
-  eventForm.addEventListener("submit", async e=>{
-    e.preventDefault();
-    const payload = {
-      flight_id: flightSelect.value,
-      time: nowUTC(),
-      lat:+lat.value,
-      lon:+lon.value,
-      lux:+lux.value,
-      status:status.value
-    };
-
-    const id = editId.value;
-    const url = id ? `${EVENTS_URL}/${id}` : EVENTS_URL;
-    const method = id ? "PUT" : "POST";
-
-    try{
-      const r = await fetch(url, {method, headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
-      if(!r.ok) return showMsg("DB error (check flight ID)", false);
-
-      showMsg(id?"Updated":"Added");
-      resetForm();
-      await loadEvents();
-      render();
-    } catch(e){
-      showMsg("Failed to save entry", false);
-    }
-  });
-
-  // ---- EDIT / DELETE ----
-  window.editEvent = (id,index) => {
-    const e = events[index];
-    editId.value = id;
-    flightSelect.value = e.flight_id;
-    lat.value = e.lat;
-    lon.value = e.lon;
-    lux.value = e.lux;
-    status.value = e.status;
-    showMsg("Editing entry");
-    map.panTo([e.lat,e.lon]);
-  };
-
-  window.deleteEvent = async id => {
-    if(!confirm("Delete this entry?")) return;
-    await fetch(`${EVENTS_URL}/${id}`,{method:"DELETE"});
-    showMsg("Deleted");
-    await loadEvents();
-    render();
-  };
-
-  function resetForm(){
-    eventForm.reset();
-    editId.value="";
-  }
-
-  // ---- INIT ----
-  initMap();
-  await loadFlights();
-  await loadEvents();
-  render();
-};
+// Initialize
+initMap();
+loadEvents();
 </script>
 </body>
 </html>
