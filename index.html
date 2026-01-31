@@ -69,12 +69,15 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
 
 <div class="panel">
   <h3>🗄 Drone Database Viewer</h3>
+
+  <!-- UPDATED ROUTES HERE -->
   <select id="tableSelector">
-    <option value="streetlights">Streetlights</option>
-    <option value="pothole-events">Pothole Events</option>
+    <option value="streetlight">Streetlights (Fixed Poles)</option>
+    <option value="streetlightEvents">Streetlight Events</option>
+    <option value="potholeEvents">Pothole Events</option>
     <option value="flights">Flights</option>
-    <option value="streetlight-events">Streetlight Events</option>
   </select>
+
   <table>
     <thead id="tableHeader"></thead>
     <tbody id="tableBody"></tbody>
@@ -87,7 +90,7 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-const BASE_URL = "https://drone-backend-tsv0.onrender.com"; // your backend
+const BASE_URL = "https://backend-dp-17cw.onrender.com"; // new backend
 
 let map, markers = [], highlightMarker = null;
 let selectedRow = null;
@@ -95,7 +98,6 @@ let currentData = [];
 
 // ---------- INIT MAP ----------
 function initMap(){
-  // UMS coordinates: 6.03408, 116.118921
   map = L.map('map').setView([6.03408, 116.118921], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
@@ -113,28 +115,26 @@ async function loadTable(tableName){
   }
 }
 
-// ---------- RENDER TABLE & MAP ----------
+// ---------- RENDER ----------
 function renderTableAndMap(tableName, data){
-  // Clear previous markers and table
   markers.forEach(m => map.removeLayer(m));
   markers = [];
-  document.getElementById('tableBody').innerHTML = '';
-  document.getElementById('tableHeader').innerHTML = '';
+  tableBody.innerHTML = '';
+  tableHeader.innerHTML = '';
 
   if(!data.length) return;
 
-  // Create table header dynamically
+  // Header
   const headerRow = document.createElement('tr');
   Object.keys(data[0]).forEach(col => {
     const th = document.createElement('th');
     th.textContent = col;
     headerRow.appendChild(th);
   });
-  document.getElementById('tableHeader').appendChild(headerRow);
+  tableHeader.appendChild(headerRow);
 
-  // Add table rows and markers
+  // Rows
   data.forEach((row, index) => {
-    // Table row
     const tr = document.createElement('tr');
     Object.values(row).forEach(val => {
       const td = document.createElement('td');
@@ -142,15 +142,18 @@ function renderTableAndMap(tableName, data){
       tr.appendChild(td);
     });
     tr.addEventListener('click', () => highlightRowOnMap(index));
-    document.getElementById('tableBody').appendChild(tr);
+    tableBody.appendChild(tr);
 
-    // Map marker if coordinates exist
-    const lat = row.latitude || row.lat;
-    const lon = row.longitude || row.lon;
+    // Marker if coords exist
+    const lat = row.latitude ?? row.lat;
+    const lon = row.longitude ?? row.lon;
     if(lat && lon){
-      const m = L.marker([lat, lon]);
-      m.bindPopup(Object.entries(row).map(([k,v]) => `<b>${k}</b>: ${v}`).join('<br>'));
-      m.addTo(map);
+      const m = L.marker([lat, lon]).addTo(map);
+      m.bindPopup(
+        Object.entries(row)
+          .map(([k,v]) => `<b>${k}</b>: ${v}`)
+          .join('<br>')
+      );
       markers.push(m);
     }
   });
@@ -159,8 +162,8 @@ function renderTableAndMap(tableName, data){
 // ---------- HIGHLIGHT ----------
 function highlightRowOnMap(index){
   const row = currentData[index];
-  const lat = row.latitude || row.lat;
-  const lon = row.longitude || row.lon;
+  const lat = row.latitude ?? row.lat;
+  const lon = row.longitude ?? row.lon;
   if(!lat || !lon) return;
 
   if(highlightMarker) map.removeLayer(highlightMarker);
@@ -175,12 +178,11 @@ function highlightRowOnMap(index){
 
   map.panTo([lat, lon]);
 
-  // Highlight table row
   const prev = document.querySelector('#tableBody tr.selected');
   if(prev) prev.classList.remove('selected');
   document.querySelectorAll('#tableBody tr')[index].classList.add('selected');
 
-  document.getElementById('coords').textContent = `Highlighted: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  coords.textContent = `Highlighted: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
 
 // ---------- INIT ----------
@@ -197,3 +199,4 @@ window.onload = async () => {
 
 </body>
 </html>
+
