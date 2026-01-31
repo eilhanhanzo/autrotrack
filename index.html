@@ -106,6 +106,9 @@ function initMap(){
 async function loadTable(tableName){
   try {
     const res = await fetch(`${BASE_URL}/${tableName}`);
+    if (!res.ok) {
+  throw new Error(`HTTP ${res.status} ${res.statusText}`);
+}
     const data = await res.json();
     currentData = data;
     renderTableAndMap(tableName, data);
@@ -199,5 +202,6 @@ window.onload = async () => {
 
 </body>
 </html>
+
 
 
