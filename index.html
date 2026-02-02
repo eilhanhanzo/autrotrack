@@ -22,20 +22,23 @@ html, body {
   left: 10px;
   width: 420px;
   background: rgba(255,255,255,0.97);
-  padding: 15px;
-  border-radius: 8px;
+  padding: 14px;
+  border-radius: 10px;
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   max-height: 95vh;
   overflow-y: auto;
 }
 
-h3 { margin: 10px 0 5px; font-size: 15px; }
+h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
 
 select {
   width: 100%;
   margin-bottom: 10px;
-  padding: 5px;
+  padding: 6px;
   font-size: 13px;
 }
 
@@ -43,7 +46,6 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
-  margin-top: 5px;
 }
 
 th, td {
@@ -55,6 +57,15 @@ th, td {
 th { background: #f2f2f2; }
 tr:hover { background: #e6f2ff; cursor: pointer; }
 tr.selected { background: #b8d4ff !important; font-weight: bold; }
+
+.legend {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.legend span {
+  font-weight: bold;
+}
 
 #coords {
   position: absolute;
@@ -76,19 +87,24 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
   <h3>🗄 Drone Infrastructure Viewer</h3>
 
   <select id="tableSelector">
-    <option value="streetlights">Streetlights (Fixed Poles)</option>
-    <option value="streetlight-events">Streetlight Events</option>
-    <option value="pothole-events">Pothole Events</option>
-    <option value="flights">Flights</option>
+    <option value="streetlights-status">💡 Fixed Poles (Status)</option>
+    <option value="pothole-events">🕳️ Potholes</option>
   </select>
 
   <table>
     <thead id="tableHeader"></thead>
     <tbody id="tableBody"></tbody>
   </table>
+
+  <div class="legend">
+    <b>Legend</b><br>
+    <span style="color:#2e7d32;">●</span> Pole ON<br>
+    <span style="color:#c62828;">●</span> Pole OFF<br>
+    <span style="color:#555;">●</span> Pothole
+  </div>
 </div>
 
-<div id="coords">Click row to highlight</div>
+<div id="coords">Click a row to highlight</div>
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -96,81 +112,82 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
 <script>
 const BASE_URL = "https://backend-dp-17cw.onrender.com";
 
+const ENDPOINTS = {
+  "streetlights-status": "/streetlights/status",
+  "pothole-events": "/pothole-events"
+};
+
+const COLUMN_WHITELIST = {
+  "streetlights-status": [
+    "streetlight_id",
+    "inferred_status",
+    "on_ratio",
+    "total_samples"
+  ],
+  "pothole-events": [
+    "id",
+    "confidence",
+    "lat",
+    "lon"
+  ]
+};
+
 let map, markers = [], highlightMarker = null;
 let currentData = [];
 
-// ---------- INIT MAP ----------
+// ---------- MAP ----------
 function initMap(){
-  map = L.map('map').setView([6.03408, 116.118921], 15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  map = L.map("map").setView([6.03408, 116.118921], 15);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 }
 
 // ---------- FETCH ----------
-async function loadTable(tableName){
+async function loadTable(view){
   try {
-    const res = await fetch(`${BASE_URL}/${tableName}`);
+    const res = await fetch(BASE_URL + ENDPOINTS[view]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    currentData = data;
-    renderTableAndMap(tableName, data);
+    currentData = await res.json();
+    renderTableAndMap(view, currentData);
   } catch (err) {
     console.error(err);
-    alert("Failed to fetch " + tableName);
+    alert("Failed to load data");
   }
 }
 
-// ---------- POPUP BUILDER ----------
-function buildPopupContent(tableName, row) {
+// ---------- POPUPS ----------
+function buildPopup(view, row) {
 
-  // POTHOLES
-  if (tableName === "pothole-events") {
+  if (view === "streetlights-status") {
+    return `
+      <b>💡 Streetlight Pole</b><br>
+      <b>Status:</b> ${row.inferred_status}<br>
+      <b>ON Ratio:</b> ${row.on_ratio}<br>
+      <b>Samples:</b> ${row.total_samples}
+      <details style="margin-top:6px;">
+        <summary>Technical</summary>
+        <small>
+          <b>ID:</b> ${row.streetlight_id}<br>
+          <b>Flight:</b> ${row.flight_id}
+        </small>
+      </details>
+    `;
+  }
+
+  if (view === "pothole-events") {
     const conf = row.confidence != null
-      ? `${(row.confidence * 100).toFixed(1)}%`
+      ? (row.confidence * 100).toFixed(1) + "%"
       : "N/A";
 
-    const lat = (row.lat ?? row.latitude)?.toFixed(5);
-    const lon = (row.lon ?? row.longitude)?.toFixed(5);
-
     return `
-      <b>🕳️ Pothole Detected</b><br>
+      <b>🕳️ Pothole</b><br>
       <b>Confidence:</b> ${conf}<br>
-      <b>Location:</b> ${lat}, ${lon}
-      <details style="margin-top:6px;">
-        <summary style="cursor:pointer;">Technical details</summary>
-        <small>
-          <b>ID:</b> ${row.id}<br>
-          <b>Flight ID:</b> ${row.flight_id}
-        </small>
-      </details>
+      <b>Location:</b> ${row.lat.toFixed(5)}, ${row.lon.toFixed(5)}
     `;
   }
-
-  // STREETLIGHT EVENTS
-  if (tableName === "streetlight-events") {
-    return `
-      <b>💡 Streetlight Event</b><br>
-      <b>Status:</b> ${row.status}<br>
-      <b>Lux:</b> ${row.lux}<br>
-      <b>Time:</b> ${row.utc_datetime}
-      <details style="margin-top:6px;">
-        <summary style="cursor:pointer;">Technical details</summary>
-        <small>
-          <b>ID:</b> ${row.id}<br>
-          <b>Streetlight ID:</b> ${row.streetlight_id}<br>
-          <b>Flight ID:</b> ${row.flight_id}
-        </small>
-      </details>
-    `;
-  }
-
-  // FALLBACK
-  return Object.entries(row)
-    .map(([k,v]) => `<b>${k}</b>: ${v}`)
-    .join("<br>");
 }
 
 // ---------- RENDER ----------
-function renderTableAndMap(tableName, data){
+function renderTableAndMap(view, data){
   markers.forEach(m => map.removeLayer(m));
   markers = [];
   tableHeader.innerHTML = "";
@@ -178,41 +195,54 @@ function renderTableAndMap(tableName, data){
 
   if (!data.length) return;
 
+  const cols = COLUMN_WHITELIST[view];
+
   // Header
   const hr = document.createElement("tr");
-  Object.keys(data[0]).forEach(k => {
+  cols.forEach(c => {
     const th = document.createElement("th");
-    th.textContent = k;
+    th.textContent = c;
     hr.appendChild(th);
   });
   tableHeader.appendChild(hr);
 
-  // Rows
-  data.forEach((row, index) => {
+  // Rows + markers
+  data.forEach((row, idx) => {
     const tr = document.createElement("tr");
 
-    Object.values(row).forEach(v => {
+    cols.forEach(c => {
       const td = document.createElement("td");
-      td.textContent = (typeof v === "number") ? v.toFixed(6) : v;
+      td.textContent = row[c];
       tr.appendChild(td);
     });
 
-    tr.addEventListener("click", () => highlightRowOnMap(index));
+    tr.onclick = () => highlight(idx);
     tableBody.appendChild(tr);
 
     const lat = row.latitude ?? row.lat;
     const lon = row.longitude ?? row.lon;
+    if (!lat || !lon) return;
 
-    if (lat && lon) {
-      const m = L.marker([lat, lon]).addTo(map);
-      m.bindPopup(buildPopupContent(tableName, row));
-      markers.push(m);
+    let color = "#555";
+    if (view === "streetlights-status") {
+      color = row.inferred_status === "ON" ? "#2e7d32" : "#c62828";
     }
+
+    const m = L.circleMarker([lat, lon], {
+      radius: 8,
+      color,
+      fillColor: color,
+      fillOpacity: 0.8,
+      weight: 2
+    }).addTo(map);
+
+    m.bindPopup(buildPopup(view, row));
+    markers.push(m);
   });
 }
 
 // ---------- HIGHLIGHT ----------
-function highlightRowOnMap(index){
+function highlight(index){
   const row = currentData[index];
   const lat = row.latitude ?? row.lat;
   const lon = row.longitude ?? row.lon;
@@ -243,8 +273,7 @@ window.onload = async () => {
   initMap();
   const selector = document.getElementById("tableSelector");
   await loadTable(selector.value);
-
-  selector.addEventListener("change", e => loadTable(e.target.value));
+  selector.onchange = e => loadTable(e.target.value);
 };
 </script>
 
