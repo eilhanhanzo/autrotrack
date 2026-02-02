@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Streetlight Viewer</title>
+<title>Drone Infrastructure Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -32,7 +32,12 @@ html, body {
 
 h3 { margin: 10px 0 5px; font-size: 15px; }
 
-select { width: 100%; margin-bottom: 10px; padding: 5px; font-size: 13px; }
+select {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 5px;
+  font-size: 13px;
+}
 
 table {
   width: 100%;
@@ -68,9 +73,8 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
 <body>
 
 <div class="panel">
-  <h3>🗄 Drone Database Viewer</h3>
+  <h3>🗄 Drone Infrastructure Viewer</h3>
 
-  <!-- UPDATED ROUTES HERE -->
   <select id="tableSelector">
     <option value="streetlights">Streetlights (Fixed Poles)</option>
     <option value="streetlight-events">Streetlight Events</option>
@@ -90,10 +94,9 @@ tr.selected { background: #b8d4ff !important; font-weight: bold; }
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-const BASE_URL = "https://backend-dp-17cw.onrender.com"; // new backend
+const BASE_URL = "https://backend-dp-17cw.onrender.com";
 
 let map, markers = [], highlightMarker = null;
-let selectedRow = null;
 let currentData = [];
 
 // ---------- INIT MAP ----------
@@ -102,61 +105,107 @@ function initMap(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
-// ---------- FETCH DATA ----------
+// ---------- FETCH ----------
 async function loadTable(tableName){
   try {
     const res = await fetch(`${BASE_URL}/${tableName}`);
-    if (!res.ok) {
-  throw new Error(`HTTP ${res.status} ${res.statusText}`);
-}
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     currentData = data;
     renderTableAndMap(tableName, data);
   } catch (err) {
-    console.error("Failed to fetch", tableName, err);
+    console.error(err);
     alert("Failed to fetch " + tableName);
   }
+}
+
+// ---------- POPUP BUILDER ----------
+function buildPopupContent(tableName, row) {
+
+  // POTHOLES
+  if (tableName === "pothole-events") {
+    const conf = row.confidence != null
+      ? `${(row.confidence * 100).toFixed(1)}%`
+      : "N/A";
+
+    const lat = (row.lat ?? row.latitude)?.toFixed(5);
+    const lon = (row.lon ?? row.longitude)?.toFixed(5);
+
+    return `
+      <b>🕳️ Pothole Detected</b><br>
+      <b>Confidence:</b> ${conf}<br>
+      <b>Location:</b> ${lat}, ${lon}
+      <details style="margin-top:6px;">
+        <summary style="cursor:pointer;">Technical details</summary>
+        <small>
+          <b>ID:</b> ${row.id}<br>
+          <b>Flight ID:</b> ${row.flight_id}
+        </small>
+      </details>
+    `;
+  }
+
+  // STREETLIGHT EVENTS
+  if (tableName === "streetlight-events") {
+    return `
+      <b>💡 Streetlight Event</b><br>
+      <b>Status:</b> ${row.status}<br>
+      <b>Lux:</b> ${row.lux}<br>
+      <b>Time:</b> ${row.utc_datetime}
+      <details style="margin-top:6px;">
+        <summary style="cursor:pointer;">Technical details</summary>
+        <small>
+          <b>ID:</b> ${row.id}<br>
+          <b>Streetlight ID:</b> ${row.streetlight_id}<br>
+          <b>Flight ID:</b> ${row.flight_id}
+        </small>
+      </details>
+    `;
+  }
+
+  // FALLBACK
+  return Object.entries(row)
+    .map(([k,v]) => `<b>${k}</b>: ${v}`)
+    .join("<br>");
 }
 
 // ---------- RENDER ----------
 function renderTableAndMap(tableName, data){
   markers.forEach(m => map.removeLayer(m));
   markers = [];
-  tableBody.innerHTML = '';
-  tableHeader.innerHTML = '';
+  tableHeader.innerHTML = "";
+  tableBody.innerHTML = "";
 
-  if(!data.length) return;
+  if (!data.length) return;
 
   // Header
-  const headerRow = document.createElement('tr');
-  Object.keys(data[0]).forEach(col => {
-    const th = document.createElement('th');
-    th.textContent = col;
-    headerRow.appendChild(th);
+  const hr = document.createElement("tr");
+  Object.keys(data[0]).forEach(k => {
+    const th = document.createElement("th");
+    th.textContent = k;
+    hr.appendChild(th);
   });
-  tableHeader.appendChild(headerRow);
+  tableHeader.appendChild(hr);
 
   // Rows
   data.forEach((row, index) => {
-    const tr = document.createElement('tr');
-    Object.values(row).forEach(val => {
-      const td = document.createElement('td');
-      td.textContent = (typeof val === 'number') ? val.toFixed(6) : val;
+    const tr = document.createElement("tr");
+
+    Object.values(row).forEach(v => {
+      const td = document.createElement("td");
+      td.textContent = (typeof v === "number") ? v.toFixed(6) : v;
       tr.appendChild(td);
     });
-    tr.addEventListener('click', () => highlightRowOnMap(index));
+
+    tr.addEventListener("click", () => highlightRowOnMap(index));
     tableBody.appendChild(tr);
 
-    // Marker if coords exist
     const lat = row.latitude ?? row.lat;
     const lon = row.longitude ?? row.lon;
-    if(lat && lon){
+
+    if (lat && lon) {
       const m = L.marker([lat, lon]).addTo(map);
-      m.bindPopup(
-        Object.entries(row)
-          .map(([k,v]) => `<b>${k}</b>: ${v}`)
-          .join('<br>')
-      );
+      m.bindPopup(buildPopupContent(tableName, row));
       markers.push(m);
     }
   });
@@ -167,23 +216,24 @@ function highlightRowOnMap(index){
   const row = currentData[index];
   const lat = row.latitude ?? row.lat;
   const lon = row.longitude ?? row.lon;
-  if(!lat || !lon) return;
+  if (!lat || !lon) return;
 
-  if(highlightMarker) map.removeLayer(highlightMarker);
+  if (highlightMarker) map.removeLayer(highlightMarker);
 
   highlightMarker = L.circleMarker([lat, lon], {
     radius: 12,
-    color: '#ff5722',
-    fillColor: '#ff5722',
+    color: "#ff5722",
+    fillColor: "#ff5722",
     fillOpacity: 0.7,
     weight: 3
   }).addTo(map);
 
   map.panTo([lat, lon]);
 
-  const prev = document.querySelector('#tableBody tr.selected');
-  if(prev) prev.classList.remove('selected');
-  document.querySelectorAll('#tableBody tr')[index].classList.add('selected');
+  document.querySelectorAll("#tableBody tr")
+    .forEach(r => r.classList.remove("selected"));
+  document.querySelectorAll("#tableBody tr")[index]
+    .classList.add("selected");
 
   coords.textContent = `Highlighted: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
@@ -191,20 +241,12 @@ function highlightRowOnMap(index){
 // ---------- INIT ----------
 window.onload = async () => {
   initMap();
-  const selector = document.getElementById('tableSelector');
+  const selector = document.getElementById("tableSelector");
   await loadTable(selector.value);
 
-  selector.addEventListener('change', async (e) => {
-    await loadTable(e.target.value);
-  });
+  selector.addEventListener("change", e => loadTable(e.target.value));
 };
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
